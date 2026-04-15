@@ -4,16 +4,74 @@ format: html
 editor: visual
 ---
 
-## Quarto
+# Predictive modelling for wages
 
-Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+## Objectives
 
-## Running Code
+-   Build a model that will predict the variable “wage”. Put differently, the dependent variable of the model should be y = “wage”.
+
+-   You are free to decide on the features you include as explanatory variables as well as the specific models you use. You need to provide details as to decisions you have taken («why did you choose algorithm XYZ»? «How did you choose the features?» «How did you transform them»? Etc.).
+
+-   Once you have built your predictive model, you need to explain it! You need to run explainability techniques so to identify the main features that drive the wage predictions in your model.
+
+-   How will your model predict for you? Use your model to predict the wage that each one from the team will earn in the future.
+
+## Setups and libraries
+
+```{r, Setup}
+
+library(tidyverse)
+library(caret)
+library(randomForest)
+library(xgboost)
+library(DALEX)
+library(iml)
+library(ggplot2)
+library(corrplot)
+library(fastDummies)
+library(Metrics)
+library(gridExtra)
+library(vip)
+
+load("data_wage.Rdata")
+
+
+```
+
+## Exploring data
+
+```{r, exploration}
+summary(data)
+
+# Check for missing data
+missing_summary <- data %>%
+  summarise(across(everything(), ~ sum(is.na(.)))) %>%
+  pivot_longer(everything(), names_to = "variable", values_to = "missing_count") %>%
+  mutate(missing_pct = round(missing_count / nrow(data) * 100, 1)) %>%
+  filter(missing_count > 0) %>%
+  arrange(desc(missing_pct))
+print(missing_summary)
+
+
+p1 <- ggplot(data, aes(x = wage)) +
+  geom_histogram(fill = "steelblue", bins = 40, alpha = 0.8) +
+  labs(title = "Distribution of Wage", x = "Wage", y = "Count") +
+  theme_minimal()
+
+p2 <- ggplot(data, aes(x = log1p(wage))) +
+  geom_histogram(fill = "darkorange", bins = 40, alpha = 0.8) +
+  labs(title = "Distribution of log(Wage + 1)", x = "log(Wage + 1)", y = "Count") +
+  theme_minimal()
+
+gridExtra::grid.arrange(p1, p2, ncol = 2)
+```
+
+## Transformation and clean up
 
 When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
 
 ```{r}
-1 + 1
+data_wage
 ```
 
 You can add options to executable code like this
