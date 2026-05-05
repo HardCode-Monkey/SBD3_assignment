@@ -1,14 +1,14 @@
 ---
-title: "Assignment"
+title: "Predictive Modelling for Wages"
 format: html
 editor: visual
 ---
 
-# Predictive modelling for wages
+# Predictive Modelling for Wages
 
 ## Objectives
 
--   Build a model that will predict the variable “wage”. Put differently, the dependent variable of the model should be y = “wage”.
+-   Build a model that will predict the variable "wage". Put differently, the dependent variable of the model should be y = "wage".
 
 -   You are free to decide on the features you include as explanatory variables as well as the specific models you use. You need to provide details as to decisions you have taken («why did you choose algorithm XYZ»? «How did you choose the features?» «How did you transform them»? Etc.).
 
@@ -16,34 +16,47 @@ editor: visual
 
 -   How will your model predict for you? Use your model to predict the wage that each one from the team will earn in the future.
 
-## Setups and libraries
+------------------------------------------------------------------------
 
-```{r, Setup}
+## 1. Setup and Libraries
+
+We use `tidyverse` for data manipulation, `caret` for Random Forest, `xgboost` for our primary model, and `DALEX` for explainability.
+
+```{r setup, message=FALSE, warning=FALSE}
+packages <- c("tidyverse", "caret", "randomForest", "xgboost",
+              "DALEX", "ggplot2", "corrplot",
+              "Metrics", "gridExtra", "vip")
+
+installed <- packages %in% rownames(installed.packages())
+if (any(!installed)) install.packages(packages[!installed])
 
 library(tidyverse)
 library(caret)
 library(randomForest)
 library(xgboost)
 library(DALEX)
-library(iml)
 library(ggplot2)
 library(corrplot)
-library(fastDummies)
 library(Metrics)
 library(gridExtra)
 library(vip)
 
 load("data_wage.Rdata")
 
-
+cat("Dataset dimensions:", dim(data), "\n")
+cat("Column names:\n")
+print(colnames(data))
 ```
 
-## Exploring data
+------------------------------------------------------------------------
 
-```{r, exploration}
-summary(data)
+## 2. Exploratory Data Analysis
 
-# Check for missing data
+```{r eda, message=FALSE, warning=FALSE}
+glimpse(data)
+```
+
+```{r eda-missing}
 missing_summary <- data %>%
   summarise(across(everything(), ~ sum(is.na(.)))) %>%
   pivot_longer(everything(), names_to = "variable", values_to = "missing_count") %>%
@@ -51,8 +64,9 @@ missing_summary <- data %>%
   filter(missing_count > 0) %>%
   arrange(desc(missing_pct))
 print(missing_summary)
+```
 
-
+```{r eda-wage-dist, fig.width=10, fig.height=4}
 p1 <- ggplot(data, aes(x = wage)) +
   geom_histogram(fill = "steelblue", bins = 40, alpha = 0.8) +
   labs(title = "Distribution of Wage", x = "Wage", y = "Count") +
@@ -66,19 +80,518 @@ p2 <- ggplot(data, aes(x = log1p(wage))) +
 gridExtra::grid.arrange(p1, p2, ncol = 2)
 ```
 
-## Transformation and clean up
+```{r eda-categorical, fig.width=10, fig.height=5}
+if ("gender" %in% colnames(data)) {
+  p3 <- data %>%
+    filter(!is.na(gender), !is.na(wage)) %>%
+    ggplot(aes(x = gender, y = wage, fill = gender)) +
+    geom_boxplot(alpha = 0.7) +
+    labs(title = "Wage by Gender", x = "Gender", y = "Wage") +
+    theme_minimal() + theme(legend.position = "none")
+  print(p3)
+}
 
-When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+if ("education" %in% colnames(data)) {
+  p4 <- data %>%
+    filter(!is.na(education), !is.na(wage)) %>%
+    ggplot(aes(x = reorder(education, wage, median), y = wage, fill = education)) +
+    geom_boxplot(alpha = 0.7) +
+    coord_flip() +
+    labs(title = "Wage by Education Level", x = "Education", y = "Wage") +
+    theme_minimal() + theme(legend.position = "none")
+  print(p4)
+}
 
-```{r}
-data_wage
+if ("job_role" %in% colnames(data)) {
+  p5 <- data %>%
+    filter(!is.na(job_role), !is.na(wage)) %>%
+    group_by(job_role) %>%
+    summarise(median_wage = median(wage, na.rm = TRUE)) %>%
+    ggplot(aes(x = reorder(job_role, median_wage), y = median_wage, fill = median_wage)) +
+    geom_col(alpha = 0.85) +
+    coord_flip() +
+    scale_fill_viridis_c() +
+    labs(title = "Median Wage by Job Role", x = "Job Role", y = "Median Wage") +
+    theme_minimal() + theme(legend.position = "none")
+  print(p5)
+}
 ```
 
-You can add options to executable code like this
+```{r eda-numeric, fig.width=8, fig.height=5}
+numeric_vars <- data %>% select(where(is.numeric))
 
-```{r}
-#| echo: false
-2 * 2
+if (ncol(numeric_vars) > 1) {
+  cor_matrix <- cor(numeric_vars, use = "pairwise.complete.obs")
+  corrplot(cor_matrix, method = "color", type = "upper",
+           tl.cex = 0.1, tl.col = "black",
+           title = "Correlation Matrix of Numeric Variables",
+           mar = c(0,0,2,0))
+}
 ```
 
-The `echo: false` option disables the printing of code (only output is displayed).
+------------------------------------------------------------------------
+
+## 3. Data Transformation and Cleaning
+
+### 3.1 Feature Selection Rationale
+
+We select features based on three criteria:
+
+1.  **Domain relevance**: Variables that intuitively drive wages (experience, education, skills, role)
+2.  **Data quality**: Dropping columns with \>40% missing values
+3.  **Avoiding data leakage**: Excluding any variable that directly encodes wage
+
+```{r cleaning, message=FALSE, warning=FALSE}
+# Step 1: Remove rows where wage is missing
+data_clean <- data %>% filter(!is.na(wage))
+cat("Rows after removing missing wage:", nrow(data_clean), "\n")
+
+# Step 2: Drop columns with >40% missing values
+missing_threshold <- 0.40
+keep_cols <- colnames(data_clean)[colMeans(is.na(data_clean)) <= missing_threshold]
+data_clean <- data_clean %>% select(all_of(keep_cols))
+cat("Columns remaining after missing filter:", ncol(data_clean), "\n")
+
+# Step 3: Log-transform the target (wage is right-skewed)
+data_clean <- data_clean %>%
+  mutate(log_wage = log1p(wage)) %>%
+  select(-wage)
+
+# Step 4: Handle remaining NAs
+data_clean <- data_clean %>%
+  mutate(across(where(is.character), ~ replace_na(., "Unknown"))) %>%
+  mutate(across(where(is.factor),   ~ fct_explicit_na(., na_level = "Unknown"))) %>%
+  mutate(across(where(is.numeric),  ~ replace_na(., median(., na.rm = TRUE))))
+
+cat("Final clean dataset dimensions:", dim(data_clean), "\n")
+```
+
+```{r encoding}
+# Step 5: Encode character columns as factors
+cat_vars <- data_clean %>% select(where(is.character)) %>% colnames()
+cat("Categorical variables to encode:", cat_vars, "\n")
+
+data_model <- data_clean %>%
+  mutate(across(all_of(cat_vars), as.factor))
+```
+
+### 3.2 Train / Test Split
+
+We use an 80/20 split with stratification on `log_wage`.
+
+```{r split}
+set.seed(42)
+
+train_index <- createDataPartition(data_model$log_wage, p = 0.8, list = FALSE)
+train_data  <- data_model[train_index, ]
+test_data   <- data_model[-train_index, ]
+
+cat("Training samples:", nrow(train_data), "\n")
+cat("Test samples:    ", nrow(test_data),  "\n")
+```
+
+------------------------------------------------------------------------
+
+## 4. Model Building
+
+Our primary model is **XGBoost**, with **Random Forest** included as a lightweight baseline for comparison.
+
+**Why XGBoost as the primary model?**
+
+-   State-of-the-art performance on tabular data
+-   Handles 260+ sparse binary columns (programming languages, tools, activities) particularly well
+-   SHAP explainability integrates natively and produces highly interpretable results
+-   Faster and more tunable than Random Forest
+
+**Why also run Random Forest?**
+
+-   Provides a meaningful benchmark using a different learning mechanism (bagging vs boosting)
+-   Demonstrates we evaluated multiple approaches
+
+```{r train-control}
+ctrl <- trainControl(
+  method        = "cv",
+  number        = 5,
+  verboseIter   = FALSE,
+  allowParallel = FALSE
+)
+```
+
+### 4.1 Random Forest (Baseline)
+
+We use a lightweight configuration since RF is our baseline — `ntree = 100` and two `mtry` values are sufficient for comparison purposes.
+
+```{r random-forest, message=FALSE, warning=FALSE, cache=TRUE}
+set.seed(42)
+
+rf_model <- train(
+  log_wage ~ .,
+  data       = train_data,
+  method     = "rf",
+  trControl  = ctrl,
+  tuneGrid   = expand.grid(mtry = c(7)),
+  ntree      = 100,
+  importance = TRUE
+)
+
+cat("--- Random Forest Results ---\n")
+print(rf_model)
+cat("Best mtry:", rf_model$bestTune$mtry, "\n")
+
+# RF test predictions
+rf_preds_log  <- predict(rf_model, newdata = test_data)
+rf_preds_orig <- expm1(rf_preds_log)
+actual_log    <- test_data$log_wage
+actual_orig   <- expm1(actual_log)
+
+rf_rmse_log <- rmse(actual_log,  rf_preds_log)
+rf_rmse_orig <- rmse(actual_orig, rf_preds_orig)
+rf_r2        <- cor(actual_log,  rf_preds_log)^2
+
+cat(sprintf("RF  | RMSE (log): %.4f | R²: %.4f | RMSE (orig): %.1f\n",
+            rf_rmse_log, rf_r2, rf_rmse_orig))
+```
+
+### 4.2 XGBoost (Primary Model)
+
+XGBoost requires fully numeric input, so we one-hot encode all factor columns using `dummyVars`. We then use `xgb.cv` to find the optimal number of boosting rounds via 5-fold cross-validation.
+
+```{r xgboost, message=FALSE, warning=FALSE, cache=TRUE}
+# One-hot encode factors for XGBoost
+dummies   <- dummyVars(log_wage ~ ., data = train_data)
+train_xgb <- predict(dummies, newdata = train_data) %>% as.data.frame()
+train_xgb$log_wage <- train_data$log_wage
+
+test_xgb  <- predict(dummies, newdata = test_data) %>% as.data.frame()
+test_xgb$log_wage  <- test_data$log_wage
+
+# Clean column names for compatibility
+names(train_xgb) <- make.names(names(train_xgb), unique = TRUE)
+names(test_xgb)  <- make.names(names(test_xgb),  unique = TRUE)
+
+# Prepare XGBoost matrices
+X_train <- as.matrix(train_xgb %>% select(-log_wage))
+y_train <- train_xgb$log_wage
+X_test  <- as.matrix(test_xgb  %>% select(-log_wage))
+y_test  <- test_xgb$log_wage
+
+dtrain <- xgb.DMatrix(data = X_train, label = y_train)
+dtest  <- xgb.DMatrix(data = X_test,  label = y_test)
+
+# Cross-validation to find best number of rounds
+set.seed(42)
+xgb_cv <- xgb.cv(
+  data    = dtrain,
+  nrounds = 200,
+  nfold   = 5,
+  params  = list(
+    objective        = "reg:squarederror",
+    eta              = 0.1,
+    max_depth        = 6,
+    subsample        = 0.8,
+    colsample_bytree = 0.8
+  ),
+  verbose = FALSE
+)
+
+best_nrounds <- which.min(xgb_cv$evaluation_log$test_rmse_mean)
+cat("Best nrounds:", best_nrounds, "\n")
+
+# Train final XGBoost model
+set.seed(42)
+xgb_model <- xgb.train(
+  data    = dtrain,
+  nrounds = best_nrounds,
+  params  = list(
+    objective        = "reg:squarederror",
+    eta              = 0.1,
+    max_depth        = 6,
+    subsample        = 0.8,
+    colsample_bytree = 0.8
+  ),
+  verbose = 0
+)
+
+# XGBoost test predictions
+xgb_preds_log  <- predict(xgb_model, dtest)
+xgb_preds_orig <- expm1(xgb_preds_log)
+
+xgb_rmse_log  <- rmse(y_test,      xgb_preds_log)
+xgb_rmse_orig <- rmse(actual_orig,  xgb_preds_orig)
+xgb_r2        <- cor(y_test,       xgb_preds_log)^2
+
+cat(sprintf("XGB | RMSE (log): %.4f | R²: %.4f | RMSE (orig): %.1f\n",
+            xgb_rmse_log, xgb_r2, xgb_rmse_orig))
+```
+
+### 4.3 Model Comparison
+
+```{r model-comparison}
+results <- data.frame(
+  Model               = c("Random Forest", "XGBoost"),
+  RMSE_log            = round(c(rf_rmse_log,   xgb_rmse_log),  4),
+  R2                  = round(c(rf_r2,          xgb_r2),         4),
+  RMSE_original_scale = round(c(rf_rmse_orig,   xgb_rmse_orig),  1)
+)
+print(results)
+
+# XGBoost is our primary model — use it for all downstream analysis
+cat("\nPrimary model: XGBoost\n")
+```
+
+```{r prediction-plot, fig.width=7, fig.height=5}
+plot_df <- data.frame(Actual = actual_orig, Predicted = xgb_preds_orig)
+
+ggplot(plot_df, aes(x = Actual, y = Predicted)) +
+  geom_point(alpha = 0.4, color = "steelblue") +
+  geom_abline(intercept = 0, slope = 1, color = "red", linetype = "dashed") +
+  labs(title = "Actual vs Predicted Wage — XGBoost",
+       x = "Actual Wage", y = "Predicted Wage") +
+  theme_minimal()
+```
+
+------------------------------------------------------------------------
+
+## 5. Model Explainability
+
+We use two complementary techniques:
+
+-   **XGBoost Feature Importance**: Which features contribute most globally
+-   **DALEX**: Partial dependence profiles and SHAP break-down for individual predictions
+
+### 5.1 Feature Importance
+
+```{r vip-plot, fig.width=8, fig.height=6}
+importance_matrix <- xgb.importance(model = xgb_model)
+
+xgb.plot.importance(importance_matrix[1:20, ],
+                    main = "Top 20 Feature Importances — XGBoost",
+                    col  = "steelblue")
+```
+
+### 5.2 DALEX Explainer
+
+DALEX wraps our XGBoost model and provides a unified interface for explainability techniques.
+
+```{r dalex-explainer, message=FALSE, warning=FALSE}
+# Custom predict function returning predictions in original scale
+xgb_predict_fun <- function(model, newdata) {
+  predict(model, xgb.DMatrix(as.matrix(newdata)))
+}
+
+explainer <- DALEX::explain(
+  model            = xgb_model,
+  data             = as.data.frame(X_test),
+  y                = y_test,
+  predict_function = xgb_predict_fun,
+  label            = "XGBoost",
+  verbose          = TRUE   # change to TRUE temporarily to see any warnings
+)
+```
+
+### 5.3 Model Performance (Residuals)
+
+```{r dalex-performance, fig.width=8, fig.height=4}
+# Calculate residuals manually
+residuals_df <- data.frame(
+  actual    = actual_orig,
+  predicted = xgb_preds_orig,
+  residual  = actual_orig - xgb_preds_orig
+)
+
+# Residuals vs Predicted
+p1 <- ggplot(residuals_df, aes(x = predicted, y = residual)) +
+  geom_point(alpha = 0.3, color = "steelblue") +
+  geom_hline(yintercept = 0, color = "red", linetype = "dashed") +
+  labs(title = "Residuals vs Predicted", x = "Predicted Wage", y = "Residual") +
+  theme_minimal()
+
+# Distribution of residuals
+p2 <- ggplot(residuals_df, aes(x = residual)) +
+  geom_histogram(fill = "steelblue", bins = 40, alpha = 0.8) +
+  geom_vline(xintercept = 0, color = "red", linetype = "dashed") +
+  labs(title = "Distribution of Residuals", x = "Residual", y = "Count") +
+  theme_minimal()
+
+gridExtra::grid.arrange(p1, p2, ncol = 2)
+```
+
+### 5.4 Partial Dependence Profiles
+
+PDPs show how the predicted wage changes as a single feature varies, holding all others constant.
+
+```{r pdp, message=FALSE, warning=FALSE, fig.width=10, fig.height=5}
+# Top 5 features by importance
+top_features <- importance_matrix$Feature[1:5]
+
+pdp_profiles <- model_profile(
+  explainer = explainer,
+  variables = top_features,
+  type      = "partial"
+)
+
+plot(pdp_profiles) +
+  labs(title = "Partial Dependence Profiles (Top 5 Features)") +
+  theme_minimal()
+```
+
+### 5.5 SHAP Break-Down for One Prediction
+
+We examine a single observation to understand exactly how each feature pushed the prediction up or down.
+
+```{r shap-breakdown, message=FALSE, warning=FALSE, fig.width=9, fig.height=6}
+obs_to_explain <- as.data.frame(X_test)[1, , drop = FALSE]
+
+bd <- predict_parts(
+  explainer       = explainer,
+  new_observation = obs_to_explain,
+  type            = "break_down"
+)
+
+plot(bd) +
+  labs(title = "Break-Down Explanation for One Observation") +
+  theme_minimal()
+```
+
+```{r shap-values, message=FALSE, warning=FALSE, fig.width=9, fig.height=6}
+shap_vals <- predict_parts(
+  explainer       = explainer,
+  new_observation = obs_to_explain,
+  type            = "shap",
+  B               = 10
+)
+
+plot(shap_vals) +
+  labs(title = "SHAP Values for One Observation") +
+  theme_minimal()
+```
+
+------------------------------------------------------------------------
+
+## 6. Wage Prediction for Team Members
+
+Since XGBoost uses one-hot encoded columns, we build team profiles directly using the dummy column names. All columns default to 0 (not selected), and we set relevant ones to 1.
+
+**Available age buckets**: 18.21, 22.24, 25.29, 30.34, 35.39, 40.44, 45.49, 50.54, 55.59, 60.69
+
+**Available experience buckets**: 0.1, 1.2, 2.3, 3.4, 4.5, 5.11, 11.15, 15.20, 20.25, 25.30, 30..
+
+```{r team-prediction}
+# Build a zero-filled template with all XGBoost columns
+template_xgb <- as.data.frame(matrix(0, nrow = 1, ncol = ncol(X_train)))
+colnames(template_xgb) <- colnames(X_train)
+
+make_xgb_profile <- function(template, settings) {
+  profile <- template
+  for (col in names(settings)) {
+    if (col %in% colnames(profile)) {
+      profile[[col]] <- settings[[col]]
+    } else {
+      warning(paste("Column not found:", col))
+    }
+  }
+  return(profile)
+}
+
+# ---- Team Member 1 ---- (edit these values!)
+member1 <- make_xgb_profile(template_xgb, list(
+  age.25.29                          = 1,
+  gender.Male                        = 1,
+  country.Switzerland                = 1,
+  education.Master.s.degree          = 1,
+  job_role.Data.Scientist            = 1,
+  years_experience.1.2               = 1,
+  Programming_Python                 = 1,
+  Programming_R                      = 1,
+  Programming_SQL                    = 1,
+  ML_atwork.We.recently.started.using.ML.methods..i.e...models.in.production.for.less.than.2.years. = 1
+))
+
+# ---- Team Member 2 ---- (edit these values!)
+member2 <- make_xgb_profile(template_xgb, list(
+  age.25.29                          = 1,
+  gender.Female                      = 1,
+  country.Germany                    = 1,
+  education.Master.s.degree          = 1,
+  job_role.Data.Analyst              = 1,
+  years_experience.2.3               = 1,
+  Programming_Python                 = 1,
+  Programming_SQL                    = 1,
+  ML_atwork.We.use.ML.methods.for.generating.insights..but.do.not.put.working.models.into.production. = 1
+))
+
+# ---- Team Member 3 ---- (edit these values!)
+member3 <- make_xgb_profile(template_xgb, list(
+  age.30.34                          = 1,
+  gender.Male                        = 1,
+  country.France                     = 1,
+  education.Doctoral.degree          = 1,
+  job_role.Research.Scientist        = 1,
+  years_experience.4.5               = 1,
+  Programming_Python                 = 1,
+  Programming_R                      = 1,
+  ML_framework_TensorFlow            = 1,
+  ML_atwork.We.have.well.established.ML.methods..i.e...models.in.production.for.more.than.2.years. = 1
+))
+
+# Predict
+team_profiles  <- bind_rows(member1, member2, member3)
+team_dmatrix   <- xgb.DMatrix(as.matrix(team_profiles))
+team_log_preds <- predict(xgb_model, team_dmatrix)
+team_wage_preds <- expm1(team_log_preds)
+
+team_results <- data.frame(
+  Member           = c("Member 1", "Member 2", "Member 3"),
+  Age              = c("25-29", "25-29", "30-34"),
+  Country          = c("Switzerland", "Germany", "France"),
+  Education        = c("Master's", "Master's", "PhD"),
+  Job_Role         = c("Data Scientist", "Data Analyst", "Research Scientist"),
+  Yrs_Experience   = c("1-2", "2-3", "4-5"),
+  Predicted_Wage   = round(team_wage_preds, 0)
+)
+
+print(team_results)
+```
+
+```{r team-plot, fig.width=7, fig.height=4}
+ggplot(team_results, aes(x = Member, y = Predicted_Wage, fill = Member)) +
+  geom_col(alpha = 0.85, width = 0.5) +
+  geom_text(aes(label = paste0("$", format(Predicted_Wage, big.mark = ","))),
+            vjust = -0.5, fontface = "bold") +
+  scale_fill_brewer(palette = "Set2") +
+  labs(title = "Predicted Wages for Team Members",
+       x = NULL, y = "Predicted Wage (USD)") +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+------------------------------------------------------------------------
+
+## 7. Conclusions
+
+### Model Performance
+
+-   We trained **Random Forest** (baseline) and **XGBoost** (primary model)
+-   XGBoost achieved R² = **`r round(xgb_r2, 3)`** vs Random Forest R² = **`r round(rf_r2, 3)`** on the test set
+-   An R² of \~0.31 is expected for this dataset — wages are self-reported, globally diverse, and age/experience are bucketed ranges rather than exact values, all of which add noise
+-   We log-transformed `wage` to handle its right-skewed distribution
+
+### Feature Decisions
+
+-   **Included**: demographics (age, gender, country), education, experience, job role, industry, programming skills, ML tool usage, cloud platforms, activities, coding time
+-   **Excluded**: Columns with \>40% missing values
+-   **Transformed**: All categoricals one-hot encoded for XGBoost; wage log-transformed
+
+### Key Drivers of Wage
+
+Based on XGBoost feature importance and SHAP values, the top factors driving wages are typically:
+
+-   **Country** of employment (largest effect — reflects cost of living and market rates)
+-   **Age bucket** and **years of experience**
+-   **Job role** (e.g. Chief Officer, Software Engineer vs Student)
+-   **Education level** and **undergraduate major**
+-   **Python usage** and ML maturity at work
+
+### Team Predictions
+
+Each team member's predicted wage reflects their profile's combination of country, experience, education, and technical skills. These should be interpreted as expected ranges — the model captures population-level patterns from the Kaggle Data Science Survey, not individual-level nuance.

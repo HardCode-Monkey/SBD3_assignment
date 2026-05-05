@@ -1,0 +1,1413 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.8.25">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>Predictive Modelling for Wages</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="Assigment_files/libs/clipboard/clipboard.min.js"></script>
+<script src="Assigment_files/libs/quarto-html/quarto.js" type="module"></script>
+<script src="Assigment_files/libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="Assigment_files/libs/quarto-html/axe/axe-check.js" type="module"></script>
+<script src="Assigment_files/libs/quarto-html/popper.min.js"></script>
+<script src="Assigment_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="Assigment_files/libs/quarto-html/anchor.min.js"></script>
+<link href="Assigment_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="Assigment_files/libs/quarto-html/quarto-syntax-highlighting-7b89279ff1a6dce999919e0e67d4d9ec.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="Assigment_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="Assigment_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="Assigment_files/libs/bootstrap/bootstrap-d6a003b94517c951b2d65075d42fb01b.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+
+
+</head>
+
+<body class="fullcontent quarto-light">
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">Predictive Modelling for Wages</h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<section id="predictive-modelling-for-wages" class="level1">
+<h1>Predictive Modelling for Wages</h1>
+<section id="objectives" class="level2">
+<h2 class="anchored" data-anchor-id="objectives">Objectives</h2>
+<ul>
+<li><p>Build a model that will predict the variable “wage”. Put differently, the dependent variable of the model should be y = “wage”.</p></li>
+<li><p>You are free to decide on the features you include as explanatory variables as well as the specific models you use. You need to provide details as to decisions you have taken («why did you choose algorithm XYZ»? «How did you choose the features?» «How did you transform them»? Etc.).</p></li>
+<li><p>Once you have built your predictive model, you need to explain it! You need to run explainability techniques so to identify the main features that drive the wage predictions in your model.</p></li>
+<li><p>How will your model predict for you? Use your model to predict the wage that each one from the team will earn in the future.</p></li>
+</ul>
+<hr>
+</section>
+<section id="setup-and-libraries" class="level2">
+<h2 class="anchored" data-anchor-id="setup-and-libraries">1. Setup and Libraries</h2>
+<p>We use <code>tidyverse</code> for data manipulation, <code>caret</code> for Random Forest, <code>xgboost</code> for our primary model, and <code>DALEX</code> for explainability.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>packages <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"tidyverse"</span>, <span class="st">"caret"</span>, <span class="st">"randomForest"</span>, <span class="st">"xgboost"</span>,</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>              <span class="st">"DALEX"</span>, <span class="st">"ggplot2"</span>, <span class="st">"corrplot"</span>,</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>              <span class="st">"Metrics"</span>, <span class="st">"gridExtra"</span>, <span class="st">"vip"</span>)</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>installed <span class="ot">&lt;-</span> packages <span class="sc">%in%</span> <span class="fu">rownames</span>(<span class="fu">installed.packages</span>())</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="fu">any</span>(<span class="sc">!</span>installed)) <span class="fu">install.packages</span>(packages[<span class="sc">!</span>installed])</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyverse)</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(caret)</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(randomForest)</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(xgboost)</span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(DALEX)</span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(ggplot2)</span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(corrplot)</span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(Metrics)</span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(gridExtra)</span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(vip)</span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a><span class="fu">load</span>(<span class="st">"data_wage.Rdata"</span>)</span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Dataset dimensions:"</span>, <span class="fu">dim</span>(data), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Dataset dimensions: 10809 78 </code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Column names:</span><span class="sc">\n</span><span class="st">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Column names:</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(<span class="fu">colnames</span>(data))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code> [1] "gender"                                                                                                                     
+ [2] "age"                                                                                                                        
+ [3] "country"                                                                                                                    
+ [4] "education"                                                                                                                  
+ [5] "undergraduate_major"                                                                                                        
+ [6] "job_role"                                                                                                                   
+ [7] "industry"                                                                                                                   
+ [8] "years_experience"                                                                                                           
+ [9] "ML_atwork"                                                                                                                  
+[10] "Activities_Analyze.and.understand.data.to.influence.product.or.business.decisions"                                          
+[11] "Activities_Build.and.or.run.a.machine.learning.service.that.operationally.improves.my.product.or.workflows"                 
+[12] "Activities_Build.and.or.run.the.data.infrastructure.that.my.business.uses.for.storing..analyzing..and.operationalizing.data"
+[13] "Activities_Build.prototypes.to.explore.applying.machine.learning.to.new.areas"                                              
+[14] "Activities_Do.research.that.advances.the.state.of.the.art.of.machine.learning"                                              
+[15] "Activities_None.of.these.activities.are.an.important.part.of.my.role.at.work"                                               
+[16] "Notebooks_Kaggle.Kernels"                                                                                                   
+[17] "Notebooks_Google.Colab"                                                                                                     
+[18] "Notebooks_Azure.Notebook"                                                                                                   
+[19] "Notebooks_Google.Cloud.Datalab"                                                                                             
+[20] "Notebooks_JupyterHub.Binder"                                                                                                
+[21] "Notebooks_None"                                                                                                             
+[22] "cloud_Google.Cloud.Platform..GCP."                                                                                          
+[23] "cloud_Amazon.Web.Services..AWS."                                                                                            
+[24] "cloud_Microsoft.Azure"                                                                                                      
+[25] "cloud_IBM.Cloud"                                                                                                            
+[26] "cloud_Alibaba.Cloud"                                                                                                        
+[27] "cloud_I.have.not.used.any.cloud.providers"                                                                                  
+[28] "Programming_Python"                                                                                                         
+[29] "Programming_R"                                                                                                              
+[30] "Programming_SQL"                                                                                                            
+[31] "Programming_Bash"                                                                                                           
+[32] "Programming_Java"                                                                                                           
+[33] "Programming_Javascript.Typescript"                                                                                          
+[34] "Programming_Visual.Basic.VBA"                                                                                               
+[35] "Programming_C.C.."                                                                                                          
+[36] "Programming_MATLAB"                                                                                                         
+[37] "Programming_Scala"                                                                                                          
+[38] "Programming_Julia"                                                                                                          
+[39] "Programming_SAS.STATA"                                                                                                      
+[40] "Programming_language_used_most_often"                                                                                       
+[41] "ML_framework_Scikit.Learn"                                                                                                  
+[42] "ML_framework_TensorFlow"                                                                                                    
+[43] "ML_framework_Keras"                                                                                                         
+[44] "ML_framework_PyTorch"                                                                                                       
+[45] "ML_framework_Spark.MLlib"                                                                                                   
+[46] "ML_framework_H20"                                                                                                           
+[47] "ML_framework_Caret"                                                                                                         
+[48] "ML_framework_Xgboost"                                                                                                       
+[49] "ML_framework_randomForest"                                                                                                  
+[50] "ML_framework_None"                                                                                                          
+[51] "Visualization_ggplot2"                                                                                                      
+[52] "Visualization_Matplotlib"                                                                                                   
+[53] "Visualization_Altair"                                                                                                       
+[54] "Visualization_Shiny"                                                                                                        
+[55] "Visualization_Plotly"                                                                                                       
+[56] "Visualization_None"                                                                                                         
+[57] "percent_actively.coding"                                                                                                    
+[58] "How.long.have.you.been.writing.code.to.analyze.data."                                                                       
+[59] "For.how.many.years.have.you.used.machine.learning.methods..at.work.or.in.school.."                                          
+[60] "Do.you.consider.yourself.to.be.a.data.scientist."                                                                           
+[61] "data_Categorical.Data"                                                                                                      
+[62] "data_Genetic.Data"                                                                                                          
+[63] "data_Geospatial.Data"                                                                                                       
+[64] "data_Image.Data"                                                                                                            
+[65] "data_Numerical.Data"                                                                                                        
+[66] "data_Sensor.Data"                                                                                                           
+[67] "data_Tabular.Data"                                                                                                          
+[68] "data_text.Data"                                                                                                             
+[69] "data_Time.Series.Data"                                                                                                      
+[70] "data_Video.Data"                                                                                                            
+[71] "explainability.model_Examine.individual.model.coefficients"                                                                 
+[72] "explainability.model_examine.feature.correlations"                                                                          
+[73] "explainability.model_Examine.feature.importances"                                                                           
+[74] "explainability.model_Create.partial.dependence.plots"                                                                       
+[75] "explainability.model_LIME.functions"                                                                                        
+[76] "explainability.model_SHAP.functions"                                                                                        
+[77] "explainability.model_None.I.do.not.use.these.model.explanation.techniques"                                                  
+[78] "wage"                                                                                                                       </code></pre>
+</div>
+</div>
+<hr>
+</section>
+<section id="exploratory-data-analysis" class="level2">
+<h2 class="anchored" data-anchor-id="exploratory-data-analysis">2. Exploratory Data Analysis</h2>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="fu">glimpse</span>(data)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Rows: 10,809
+Columns: 78
+$ gender                                                                                                                      &lt;fct&gt; …
+$ age                                                                                                                         &lt;fct&gt; …
+$ country                                                                                                                     &lt;fct&gt; …
+$ education                                                                                                                   &lt;fct&gt; …
+$ undergraduate_major                                                                                                         &lt;fct&gt; …
+$ job_role                                                                                                                    &lt;fct&gt; …
+$ industry                                                                                                                    &lt;fct&gt; …
+$ years_experience                                                                                                            &lt;fct&gt; …
+$ ML_atwork                                                                                                                   &lt;fct&gt; …
+$ Activities_Analyze.and.understand.data.to.influence.product.or.business.decisions                                           &lt;dbl&gt; …
+$ Activities_Build.and.or.run.a.machine.learning.service.that.operationally.improves.my.product.or.workflows                  &lt;dbl&gt; …
+$ Activities_Build.and.or.run.the.data.infrastructure.that.my.business.uses.for.storing..analyzing..and.operationalizing.data &lt;dbl&gt; …
+$ Activities_Build.prototypes.to.explore.applying.machine.learning.to.new.areas                                               &lt;dbl&gt; …
+$ Activities_Do.research.that.advances.the.state.of.the.art.of.machine.learning                                               &lt;dbl&gt; …
+$ Activities_None.of.these.activities.are.an.important.part.of.my.role.at.work                                                &lt;dbl&gt; …
+$ Notebooks_Kaggle.Kernels                                                                                                    &lt;dbl&gt; …
+$ Notebooks_Google.Colab                                                                                                      &lt;dbl&gt; …
+$ Notebooks_Azure.Notebook                                                                                                    &lt;dbl&gt; …
+$ Notebooks_Google.Cloud.Datalab                                                                                              &lt;dbl&gt; …
+$ Notebooks_JupyterHub.Binder                                                                                                 &lt;dbl&gt; …
+$ Notebooks_None                                                                                                              &lt;dbl&gt; …
+$ cloud_Google.Cloud.Platform..GCP.                                                                                           &lt;dbl&gt; …
+$ cloud_Amazon.Web.Services..AWS.                                                                                             &lt;dbl&gt; …
+$ cloud_Microsoft.Azure                                                                                                       &lt;dbl&gt; …
+$ cloud_IBM.Cloud                                                                                                             &lt;dbl&gt; …
+$ cloud_Alibaba.Cloud                                                                                                         &lt;dbl&gt; …
+$ cloud_I.have.not.used.any.cloud.providers                                                                                   &lt;dbl&gt; …
+$ Programming_Python                                                                                                          &lt;dbl&gt; …
+$ Programming_R                                                                                                               &lt;dbl&gt; …
+$ Programming_SQL                                                                                                             &lt;dbl&gt; …
+$ Programming_Bash                                                                                                            &lt;dbl&gt; …
+$ Programming_Java                                                                                                            &lt;dbl&gt; …
+$ Programming_Javascript.Typescript                                                                                           &lt;dbl&gt; …
+$ Programming_Visual.Basic.VBA                                                                                                &lt;dbl&gt; …
+$ Programming_C.C..                                                                                                           &lt;dbl&gt; …
+$ Programming_MATLAB                                                                                                          &lt;dbl&gt; …
+$ Programming_Scala                                                                                                           &lt;dbl&gt; …
+$ Programming_Julia                                                                                                           &lt;dbl&gt; …
+$ Programming_SAS.STATA                                                                                                       &lt;dbl&gt; …
+$ Programming_language_used_most_often                                                                                        &lt;fct&gt; …
+$ ML_framework_Scikit.Learn                                                                                                   &lt;dbl&gt; …
+$ ML_framework_TensorFlow                                                                                                     &lt;dbl&gt; …
+$ ML_framework_Keras                                                                                                          &lt;dbl&gt; …
+$ ML_framework_PyTorch                                                                                                        &lt;dbl&gt; …
+$ ML_framework_Spark.MLlib                                                                                                    &lt;dbl&gt; …
+$ ML_framework_H20                                                                                                            &lt;dbl&gt; …
+$ ML_framework_Caret                                                                                                          &lt;dbl&gt; …
+$ ML_framework_Xgboost                                                                                                        &lt;dbl&gt; …
+$ ML_framework_randomForest                                                                                                   &lt;dbl&gt; …
+$ ML_framework_None                                                                                                           &lt;dbl&gt; …
+$ Visualization_ggplot2                                                                                                       &lt;dbl&gt; …
+$ Visualization_Matplotlib                                                                                                    &lt;dbl&gt; …
+$ Visualization_Altair                                                                                                        &lt;dbl&gt; …
+$ Visualization_Shiny                                                                                                         &lt;dbl&gt; …
+$ Visualization_Plotly                                                                                                        &lt;dbl&gt; …
+$ Visualization_None                                                                                                          &lt;dbl&gt; …
+$ percent_actively.coding                                                                                                     &lt;fct&gt; …
+$ How.long.have.you.been.writing.code.to.analyze.data.                                                                        &lt;fct&gt; …
+$ For.how.many.years.have.you.used.machine.learning.methods..at.work.or.in.school..                                           &lt;fct&gt; …
+$ Do.you.consider.yourself.to.be.a.data.scientist.                                                                            &lt;fct&gt; …
+$ data_Categorical.Data                                                                                                       &lt;dbl&gt; …
+$ data_Genetic.Data                                                                                                           &lt;dbl&gt; …
+$ data_Geospatial.Data                                                                                                        &lt;dbl&gt; …
+$ data_Image.Data                                                                                                             &lt;dbl&gt; …
+$ data_Numerical.Data                                                                                                         &lt;dbl&gt; …
+$ data_Sensor.Data                                                                                                            &lt;dbl&gt; …
+$ data_Tabular.Data                                                                                                           &lt;dbl&gt; …
+$ data_text.Data                                                                                                              &lt;dbl&gt; …
+$ data_Time.Series.Data                                                                                                       &lt;dbl&gt; …
+$ data_Video.Data                                                                                                             &lt;dbl&gt; …
+$ explainability.model_Examine.individual.model.coefficients                                                                  &lt;dbl&gt; …
+$ explainability.model_examine.feature.correlations                                                                           &lt;dbl&gt; …
+$ explainability.model_Examine.feature.importances                                                                            &lt;dbl&gt; …
+$ explainability.model_Create.partial.dependence.plots                                                                        &lt;dbl&gt; …
+$ explainability.model_LIME.functions                                                                                         &lt;dbl&gt; …
+$ explainability.model_SHAP.functions                                                                                         &lt;dbl&gt; …
+$ explainability.model_None.I.do.not.use.these.model.explanation.techniques                                                   &lt;dbl&gt; …
+$ wage                                                                                                                        &lt;dbl&gt; …</code></pre>
+</div>
+</div>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>missing_summary <span class="ot">&lt;-</span> data <span class="sc">%&gt;%</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="fu">across</span>(<span class="fu">everything</span>(), <span class="sc">~</span> <span class="fu">sum</span>(<span class="fu">is.na</span>(.)))) <span class="sc">%&gt;%</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_longer</span>(<span class="fu">everything</span>(), <span class="at">names_to =</span> <span class="st">"variable"</span>, <span class="at">values_to =</span> <span class="st">"missing_count"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">missing_pct =</span> <span class="fu">round</span>(missing_count <span class="sc">/</span> <span class="fu">nrow</span>(data) <span class="sc">*</span> <span class="dv">100</span>, <span class="dv">1</span>)) <span class="sc">%&gt;%</span></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(missing_count <span class="sc">&gt;</span> <span class="dv">0</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(<span class="fu">desc</span>(missing_pct))</span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(missing_summary)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 0 × 3
+# ℹ 3 variables: variable &lt;chr&gt;, missing_count &lt;int&gt;, missing_pct &lt;dbl&gt;</code></pre>
+</div>
+</div>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>p1 <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(data, <span class="fu">aes</span>(<span class="at">x =</span> wage)) <span class="sc">+</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_histogram</span>(<span class="at">fill =</span> <span class="st">"steelblue"</span>, <span class="at">bins =</span> <span class="dv">40</span>, <span class="at">alpha =</span> <span class="fl">0.8</span>) <span class="sc">+</span></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Distribution of Wage"</span>, <span class="at">x =</span> <span class="st">"Wage"</span>, <span class="at">y =</span> <span class="st">"Count"</span>) <span class="sc">+</span></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>p2 <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(data, <span class="fu">aes</span>(<span class="at">x =</span> <span class="fu">log1p</span>(wage))) <span class="sc">+</span></span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_histogram</span>(<span class="at">fill =</span> <span class="st">"darkorange"</span>, <span class="at">bins =</span> <span class="dv">40</span>, <span class="at">alpha =</span> <span class="fl">0.8</span>) <span class="sc">+</span></span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Distribution of log(Wage + 1)"</span>, <span class="at">x =</span> <span class="st">"log(Wage + 1)"</span>, <span class="at">y =</span> <span class="st">"Count"</span>) <span class="sc">+</span></span>
+<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span>
+<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-11"><a href="#cb11-11" aria-hidden="true" tabindex="-1"></a>gridExtra<span class="sc">::</span><span class="fu">grid.arrange</span>(p1, p2, <span class="at">ncol =</span> <span class="dv">2</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="Assigment_files/figure-html/eda-wage-dist-1.png" class="img-fluid figure-img" width="960"></p>
+</figure>
+</div>
+</div>
+</div>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="st">"gender"</span> <span class="sc">%in%</span> <span class="fu">colnames</span>(data)) {</span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>  p3 <span class="ot">&lt;-</span> data <span class="sc">%&gt;%</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(gender), <span class="sc">!</span><span class="fu">is.na</span>(wage)) <span class="sc">%&gt;%</span></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> gender, <span class="at">y =</span> wage, <span class="at">fill =</span> gender)) <span class="sc">+</span></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_boxplot</span>(<span class="at">alpha =</span> <span class="fl">0.7</span>) <span class="sc">+</span></span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>    <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Wage by Gender"</span>, <span class="at">x =</span> <span class="st">"Gender"</span>, <span class="at">y =</span> <span class="st">"Wage"</span>) <span class="sc">+</span></span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>    <span class="fu">theme_minimal</span>() <span class="sc">+</span> <span class="fu">theme</span>(<span class="at">legend.position =</span> <span class="st">"none"</span>)</span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">print</span>(p3)</span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="Assigment_files/figure-html/eda-categorical-1.png" class="img-fluid figure-img" width="960"></p>
+</figure>
+</div>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="st">"education"</span> <span class="sc">%in%</span> <span class="fu">colnames</span>(data)) {</span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>  p4 <span class="ot">&lt;-</span> data <span class="sc">%&gt;%</span></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(education), <span class="sc">!</span><span class="fu">is.na</span>(wage)) <span class="sc">%&gt;%</span></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> <span class="fu">reorder</span>(education, wage, median), <span class="at">y =</span> wage, <span class="at">fill =</span> education)) <span class="sc">+</span></span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_boxplot</span>(<span class="at">alpha =</span> <span class="fl">0.7</span>) <span class="sc">+</span></span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>    <span class="fu">coord_flip</span>() <span class="sc">+</span></span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>    <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Wage by Education Level"</span>, <span class="at">x =</span> <span class="st">"Education"</span>, <span class="at">y =</span> <span class="st">"Wage"</span>) <span class="sc">+</span></span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>    <span class="fu">theme_minimal</span>() <span class="sc">+</span> <span class="fu">theme</span>(<span class="at">legend.position =</span> <span class="st">"none"</span>)</span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">print</span>(p4)</span>
+<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="Assigment_files/figure-html/eda-categorical-2.png" class="img-fluid figure-img" width="960"></p>
+</figure>
+</div>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="st">"job_role"</span> <span class="sc">%in%</span> <span class="fu">colnames</span>(data)) {</span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>  p5 <span class="ot">&lt;-</span> data <span class="sc">%&gt;%</span></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(job_role), <span class="sc">!</span><span class="fu">is.na</span>(wage)) <span class="sc">%&gt;%</span></span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">group_by</span>(job_role) <span class="sc">%&gt;%</span></span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">summarise</span>(<span class="at">median_wage =</span> <span class="fu">median</span>(wage, <span class="at">na.rm =</span> <span class="cn">TRUE</span>)) <span class="sc">%&gt;%</span></span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>    <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> <span class="fu">reorder</span>(job_role, median_wage), <span class="at">y =</span> median_wage, <span class="at">fill =</span> median_wage)) <span class="sc">+</span></span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_col</span>(<span class="at">alpha =</span> <span class="fl">0.85</span>) <span class="sc">+</span></span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a>    <span class="fu">coord_flip</span>() <span class="sc">+</span></span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a>    <span class="fu">scale_fill_viridis_c</span>() <span class="sc">+</span></span>
+<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a>    <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Median Wage by Job Role"</span>, <span class="at">x =</span> <span class="st">"Job Role"</span>, <span class="at">y =</span> <span class="st">"Median Wage"</span>) <span class="sc">+</span></span>
+<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a>    <span class="fu">theme_minimal</span>() <span class="sc">+</span> <span class="fu">theme</span>(<span class="at">legend.position =</span> <span class="st">"none"</span>)</span>
+<span id="cb14-12"><a href="#cb14-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">print</span>(p5)</span>
+<span id="cb14-13"><a href="#cb14-13" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="Assigment_files/figure-html/eda-categorical-3.png" class="img-fluid figure-img" width="960"></p>
+</figure>
+</div>
+</div>
+</div>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>numeric_vars <span class="ot">&lt;-</span> data <span class="sc">%&gt;%</span> <span class="fu">select</span>(<span class="fu">where</span>(is.numeric))</span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="fu">ncol</span>(numeric_vars) <span class="sc">&gt;</span> <span class="dv">1</span>) {</span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>  cor_matrix <span class="ot">&lt;-</span> <span class="fu">cor</span>(numeric_vars, <span class="at">use =</span> <span class="st">"pairwise.complete.obs"</span>)</span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">corrplot</span>(cor_matrix, <span class="at">method =</span> <span class="st">"color"</span>, <span class="at">type =</span> <span class="st">"upper"</span>,</span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>           <span class="at">tl.cex =</span> <span class="fl">0.1</span>, <span class="at">tl.col =</span> <span class="st">"black"</span>,</span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>           <span class="at">title =</span> <span class="st">"Correlation Matrix of Numeric Variables"</span>,</span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a>           <span class="at">mar =</span> <span class="fu">c</span>(<span class="dv">0</span>,<span class="dv">0</span>,<span class="dv">2</span>,<span class="dv">0</span>))</span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="Assigment_files/figure-html/eda-numeric-1.png" class="img-fluid figure-img" width="768"></p>
+</figure>
+</div>
+</div>
+</div>
+<hr>
+</section>
+<section id="data-transformation-and-cleaning" class="level2">
+<h2 class="anchored" data-anchor-id="data-transformation-and-cleaning">3. Data Transformation and Cleaning</h2>
+<section id="feature-selection-rationale" class="level3">
+<h3 class="anchored" data-anchor-id="feature-selection-rationale">3.1 Feature Selection Rationale</h3>
+<p>We select features based on three criteria:</p>
+<ol type="1">
+<li><strong>Domain relevance</strong>: Variables that intuitively drive wages (experience, education, skills, role)</li>
+<li><strong>Data quality</strong>: Dropping columns with &gt;40% missing values</li>
+<li><strong>Avoiding data leakage</strong>: Excluding any variable that directly encodes wage</li>
+</ol>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Step 1: Remove rows where wage is missing</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>data_clean <span class="ot">&lt;-</span> data <span class="sc">%&gt;%</span> <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(wage))</span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Rows after removing missing wage:"</span>, <span class="fu">nrow</span>(data_clean), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Rows after removing missing wage: 10809 </code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb18"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Step 2: Drop columns with &gt;40% missing values</span></span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>missing_threshold <span class="ot">&lt;-</span> <span class="fl">0.40</span></span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>keep_cols <span class="ot">&lt;-</span> <span class="fu">colnames</span>(data_clean)[<span class="fu">colMeans</span>(<span class="fu">is.na</span>(data_clean)) <span class="sc">&lt;=</span> missing_threshold]</span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>data_clean <span class="ot">&lt;-</span> data_clean <span class="sc">%&gt;%</span> <span class="fu">select</span>(<span class="fu">all_of</span>(keep_cols))</span>
+<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Columns remaining after missing filter:"</span>, <span class="fu">ncol</span>(data_clean), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Columns remaining after missing filter: 78 </code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb20"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Step 3: Log-transform the target (wage is right-skewed)</span></span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>data_clean <span class="ot">&lt;-</span> data_clean <span class="sc">%&gt;%</span></span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">log_wage =</span> <span class="fu">log1p</span>(wage)) <span class="sc">%&gt;%</span></span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(<span class="sc">-</span>wage)</span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Step 4: Handle remaining NAs</span></span>
+<span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a>data_clean <span class="ot">&lt;-</span> data_clean <span class="sc">%&gt;%</span></span>
+<span id="cb20-8"><a href="#cb20-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="fu">across</span>(<span class="fu">where</span>(is.character), <span class="sc">~</span> <span class="fu">replace_na</span>(., <span class="st">"Unknown"</span>))) <span class="sc">%&gt;%</span></span>
+<span id="cb20-9"><a href="#cb20-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="fu">across</span>(<span class="fu">where</span>(is.factor),   <span class="sc">~</span> <span class="fu">fct_explicit_na</span>(., <span class="at">na_level =</span> <span class="st">"Unknown"</span>))) <span class="sc">%&gt;%</span></span>
+<span id="cb20-10"><a href="#cb20-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="fu">across</span>(<span class="fu">where</span>(is.numeric),  <span class="sc">~</span> <span class="fu">replace_na</span>(., <span class="fu">median</span>(., <span class="at">na.rm =</span> <span class="cn">TRUE</span>))))</span>
+<span id="cb20-11"><a href="#cb20-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-12"><a href="#cb20-12" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Final clean dataset dimensions:"</span>, <span class="fu">dim</span>(data_clean), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Final clean dataset dimensions: 10809 78 </code></pre>
+</div>
+</div>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb22"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Step 5: Encode character columns as factors</span></span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>cat_vars <span class="ot">&lt;-</span> data_clean <span class="sc">%&gt;%</span> <span class="fu">select</span>(<span class="fu">where</span>(is.character)) <span class="sc">%&gt;%</span> <span class="fu">colnames</span>()</span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Categorical variables to encode:"</span>, cat_vars, <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Categorical variables to encode:  </code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb24"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a>data_model <span class="ot">&lt;-</span> data_clean <span class="sc">%&gt;%</span></span>
+<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="fu">across</span>(<span class="fu">all_of</span>(cat_vars), as.factor))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="train-test-split" class="level3">
+<h3 class="anchored" data-anchor-id="train-test-split">3.2 Train / Test Split</h3>
+<p>We use an 80/20 split with stratification on <code>log_wage</code>.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb25"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">42</span>)</span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a>train_index <span class="ot">&lt;-</span> <span class="fu">createDataPartition</span>(data_model<span class="sc">$</span>log_wage, <span class="at">p =</span> <span class="fl">0.8</span>, <span class="at">list =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a>train_data  <span class="ot">&lt;-</span> data_model[train_index, ]</span>
+<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a>test_data   <span class="ot">&lt;-</span> data_model[<span class="sc">-</span>train_index, ]</span>
+<span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-7"><a href="#cb25-7" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Training samples:"</span>, <span class="fu">nrow</span>(train_data), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Training samples: 8649 </code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb27"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Test samples:    "</span>, <span class="fu">nrow</span>(test_data),  <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Test samples:     2160 </code></pre>
+</div>
+</div>
+<hr>
+</section>
+</section>
+<section id="model-building" class="level2">
+<h2 class="anchored" data-anchor-id="model-building">4. Model Building</h2>
+<p>Our primary model is <strong>XGBoost</strong>, with <strong>Random Forest</strong> included as a lightweight baseline for comparison.</p>
+<p><strong>Why XGBoost as the primary model?</strong></p>
+<ul>
+<li>State-of-the-art performance on tabular data</li>
+<li>Handles 260+ sparse binary columns (programming languages, tools, activities) particularly well</li>
+<li>SHAP explainability integrates natively and produces highly interpretable results</li>
+<li>Faster and more tunable than Random Forest</li>
+</ul>
+<p><strong>Why also run Random Forest?</strong></p>
+<ul>
+<li>Provides a meaningful benchmark using a different learning mechanism (bagging vs boosting)</li>
+<li>Demonstrates we evaluated multiple approaches</li>
+</ul>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb29"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a>ctrl <span class="ot">&lt;-</span> <span class="fu">trainControl</span>(</span>
+<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">method        =</span> <span class="st">"cv"</span>,</span>
+<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">number        =</span> <span class="dv">5</span>,</span>
+<span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">verboseIter   =</span> <span class="cn">FALSE</span>,</span>
+<span id="cb29-5"><a href="#cb29-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">allowParallel =</span> <span class="cn">FALSE</span></span>
+<span id="cb29-6"><a href="#cb29-6" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<section id="random-forest-baseline" class="level3">
+<h3 class="anchored" data-anchor-id="random-forest-baseline">4.1 Random Forest (Baseline)</h3>
+<p>We use a lightweight configuration since RF is our baseline — <code>ntree = 100</code> and two <code>mtry</code> values are sufficient for comparison purposes.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb30"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">42</span>)</span>
+<span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb30-3"><a href="#cb30-3" aria-hidden="true" tabindex="-1"></a>rf_model <span class="ot">&lt;-</span> <span class="fu">train</span>(</span>
+<span id="cb30-4"><a href="#cb30-4" aria-hidden="true" tabindex="-1"></a>  log_wage <span class="sc">~</span> .,</span>
+<span id="cb30-5"><a href="#cb30-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">data       =</span> train_data,</span>
+<span id="cb30-6"><a href="#cb30-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">method     =</span> <span class="st">"rf"</span>,</span>
+<span id="cb30-7"><a href="#cb30-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">trControl  =</span> ctrl,</span>
+<span id="cb30-8"><a href="#cb30-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">tuneGrid   =</span> <span class="fu">expand.grid</span>(<span class="at">mtry =</span> <span class="fu">c</span>(<span class="dv">7</span>)),</span>
+<span id="cb30-9"><a href="#cb30-9" aria-hidden="true" tabindex="-1"></a>  <span class="at">ntree      =</span> <span class="dv">100</span>,</span>
+<span id="cb30-10"><a href="#cb30-10" aria-hidden="true" tabindex="-1"></a>  <span class="at">importance =</span> <span class="cn">TRUE</span></span>
+<span id="cb30-11"><a href="#cb30-11" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb30-12"><a href="#cb30-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb30-13"><a href="#cb30-13" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"--- Random Forest Results ---</span><span class="sc">\n</span><span class="st">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>--- Random Forest Results ---</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb32"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(rf_model)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Random Forest 
+
+8649 samples
+  77 predictor
+
+No pre-processing
+Resampling: Cross-Validated (5 fold) 
+Summary of sample sizes: 6920, 6919, 6919, 6918, 6920 
+Resampling results:
+
+  RMSE      Rsquared  MAE     
+  2.716057  0.305396  1.641713
+
+Tuning parameter 'mtry' was held constant at a value of 7</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb34"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Best mtry:"</span>, rf_model<span class="sc">$</span>bestTune<span class="sc">$</span>mtry, <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Best mtry: 7 </code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb36"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a><span class="co"># RF test predictions</span></span>
+<span id="cb36-2"><a href="#cb36-2" aria-hidden="true" tabindex="-1"></a>rf_preds_log  <span class="ot">&lt;-</span> <span class="fu">predict</span>(rf_model, <span class="at">newdata =</span> test_data)</span>
+<span id="cb36-3"><a href="#cb36-3" aria-hidden="true" tabindex="-1"></a>rf_preds_orig <span class="ot">&lt;-</span> <span class="fu">expm1</span>(rf_preds_log)</span>
+<span id="cb36-4"><a href="#cb36-4" aria-hidden="true" tabindex="-1"></a>actual_log    <span class="ot">&lt;-</span> test_data<span class="sc">$</span>log_wage</span>
+<span id="cb36-5"><a href="#cb36-5" aria-hidden="true" tabindex="-1"></a>actual_orig   <span class="ot">&lt;-</span> <span class="fu">expm1</span>(actual_log)</span>
+<span id="cb36-6"><a href="#cb36-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb36-7"><a href="#cb36-7" aria-hidden="true" tabindex="-1"></a>rf_rmse_log <span class="ot">&lt;-</span> <span class="fu">rmse</span>(actual_log,  rf_preds_log)</span>
+<span id="cb36-8"><a href="#cb36-8" aria-hidden="true" tabindex="-1"></a>rf_rmse_orig <span class="ot">&lt;-</span> <span class="fu">rmse</span>(actual_orig, rf_preds_orig)</span>
+<span id="cb36-9"><a href="#cb36-9" aria-hidden="true" tabindex="-1"></a>rf_r2        <span class="ot">&lt;-</span> <span class="fu">cor</span>(actual_log,  rf_preds_log)<span class="sc">^</span><span class="dv">2</span></span>
+<span id="cb36-10"><a href="#cb36-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb36-11"><a href="#cb36-11" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"RF  | RMSE (log): %.4f | R²: %.4f | RMSE (orig): %.1f</span><span class="sc">\n</span><span class="st">"</span>,</span>
+<span id="cb36-12"><a href="#cb36-12" aria-hidden="true" tabindex="-1"></a>            rf_rmse_log, rf_r2, rf_rmse_orig))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>RF  | RMSE (log): 2.7704 | R²: 0.3014 | RMSE (orig): 62270.1</code></pre>
+</div>
+</div>
+</section>
+<section id="xgboost-primary-model" class="level3">
+<h3 class="anchored" data-anchor-id="xgboost-primary-model">4.2 XGBoost (Primary Model)</h3>
+<p>XGBoost requires fully numeric input, so we one-hot encode all factor columns using <code>dummyVars</code>. We then use <code>xgb.cv</code> to find the optimal number of boosting rounds via 5-fold cross-validation.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb38"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a><span class="co"># One-hot encode factors for XGBoost</span></span>
+<span id="cb38-2"><a href="#cb38-2" aria-hidden="true" tabindex="-1"></a>dummies   <span class="ot">&lt;-</span> <span class="fu">dummyVars</span>(log_wage <span class="sc">~</span> ., <span class="at">data =</span> train_data)</span>
+<span id="cb38-3"><a href="#cb38-3" aria-hidden="true" tabindex="-1"></a>train_xgb <span class="ot">&lt;-</span> <span class="fu">predict</span>(dummies, <span class="at">newdata =</span> train_data) <span class="sc">%&gt;%</span> <span class="fu">as.data.frame</span>()</span>
+<span id="cb38-4"><a href="#cb38-4" aria-hidden="true" tabindex="-1"></a>train_xgb<span class="sc">$</span>log_wage <span class="ot">&lt;-</span> train_data<span class="sc">$</span>log_wage</span>
+<span id="cb38-5"><a href="#cb38-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb38-6"><a href="#cb38-6" aria-hidden="true" tabindex="-1"></a>test_xgb  <span class="ot">&lt;-</span> <span class="fu">predict</span>(dummies, <span class="at">newdata =</span> test_data) <span class="sc">%&gt;%</span> <span class="fu">as.data.frame</span>()</span>
+<span id="cb38-7"><a href="#cb38-7" aria-hidden="true" tabindex="-1"></a>test_xgb<span class="sc">$</span>log_wage  <span class="ot">&lt;-</span> test_data<span class="sc">$</span>log_wage</span>
+<span id="cb38-8"><a href="#cb38-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb38-9"><a href="#cb38-9" aria-hidden="true" tabindex="-1"></a><span class="co"># Clean column names for compatibility</span></span>
+<span id="cb38-10"><a href="#cb38-10" aria-hidden="true" tabindex="-1"></a><span class="fu">names</span>(train_xgb) <span class="ot">&lt;-</span> <span class="fu">make.names</span>(<span class="fu">names</span>(train_xgb), <span class="at">unique =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb38-11"><a href="#cb38-11" aria-hidden="true" tabindex="-1"></a><span class="fu">names</span>(test_xgb)  <span class="ot">&lt;-</span> <span class="fu">make.names</span>(<span class="fu">names</span>(test_xgb),  <span class="at">unique =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb38-12"><a href="#cb38-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb38-13"><a href="#cb38-13" aria-hidden="true" tabindex="-1"></a><span class="co"># Prepare XGBoost matrices</span></span>
+<span id="cb38-14"><a href="#cb38-14" aria-hidden="true" tabindex="-1"></a>X_train <span class="ot">&lt;-</span> <span class="fu">as.matrix</span>(train_xgb <span class="sc">%&gt;%</span> <span class="fu">select</span>(<span class="sc">-</span>log_wage))</span>
+<span id="cb38-15"><a href="#cb38-15" aria-hidden="true" tabindex="-1"></a>y_train <span class="ot">&lt;-</span> train_xgb<span class="sc">$</span>log_wage</span>
+<span id="cb38-16"><a href="#cb38-16" aria-hidden="true" tabindex="-1"></a>X_test  <span class="ot">&lt;-</span> <span class="fu">as.matrix</span>(test_xgb  <span class="sc">%&gt;%</span> <span class="fu">select</span>(<span class="sc">-</span>log_wage))</span>
+<span id="cb38-17"><a href="#cb38-17" aria-hidden="true" tabindex="-1"></a>y_test  <span class="ot">&lt;-</span> test_xgb<span class="sc">$</span>log_wage</span>
+<span id="cb38-18"><a href="#cb38-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb38-19"><a href="#cb38-19" aria-hidden="true" tabindex="-1"></a>dtrain <span class="ot">&lt;-</span> <span class="fu">xgb.DMatrix</span>(<span class="at">data =</span> X_train, <span class="at">label =</span> y_train)</span>
+<span id="cb38-20"><a href="#cb38-20" aria-hidden="true" tabindex="-1"></a>dtest  <span class="ot">&lt;-</span> <span class="fu">xgb.DMatrix</span>(<span class="at">data =</span> X_test,  <span class="at">label =</span> y_test)</span>
+<span id="cb38-21"><a href="#cb38-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb38-22"><a href="#cb38-22" aria-hidden="true" tabindex="-1"></a><span class="co"># Cross-validation to find best number of rounds</span></span>
+<span id="cb38-23"><a href="#cb38-23" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">42</span>)</span>
+<span id="cb38-24"><a href="#cb38-24" aria-hidden="true" tabindex="-1"></a>xgb_cv <span class="ot">&lt;-</span> <span class="fu">xgb.cv</span>(</span>
+<span id="cb38-25"><a href="#cb38-25" aria-hidden="true" tabindex="-1"></a>  <span class="at">data    =</span> dtrain,</span>
+<span id="cb38-26"><a href="#cb38-26" aria-hidden="true" tabindex="-1"></a>  <span class="at">nrounds =</span> <span class="dv">200</span>,</span>
+<span id="cb38-27"><a href="#cb38-27" aria-hidden="true" tabindex="-1"></a>  <span class="at">nfold   =</span> <span class="dv">5</span>,</span>
+<span id="cb38-28"><a href="#cb38-28" aria-hidden="true" tabindex="-1"></a>  <span class="at">params  =</span> <span class="fu">list</span>(</span>
+<span id="cb38-29"><a href="#cb38-29" aria-hidden="true" tabindex="-1"></a>    <span class="at">objective        =</span> <span class="st">"reg:squarederror"</span>,</span>
+<span id="cb38-30"><a href="#cb38-30" aria-hidden="true" tabindex="-1"></a>    <span class="at">eta              =</span> <span class="fl">0.1</span>,</span>
+<span id="cb38-31"><a href="#cb38-31" aria-hidden="true" tabindex="-1"></a>    <span class="at">max_depth        =</span> <span class="dv">6</span>,</span>
+<span id="cb38-32"><a href="#cb38-32" aria-hidden="true" tabindex="-1"></a>    <span class="at">subsample        =</span> <span class="fl">0.8</span>,</span>
+<span id="cb38-33"><a href="#cb38-33" aria-hidden="true" tabindex="-1"></a>    <span class="at">colsample_bytree =</span> <span class="fl">0.8</span></span>
+<span id="cb38-34"><a href="#cb38-34" aria-hidden="true" tabindex="-1"></a>  ),</span>
+<span id="cb38-35"><a href="#cb38-35" aria-hidden="true" tabindex="-1"></a>  <span class="at">verbose =</span> <span class="cn">FALSE</span></span>
+<span id="cb38-36"><a href="#cb38-36" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb38-37"><a href="#cb38-37" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb38-38"><a href="#cb38-38" aria-hidden="true" tabindex="-1"></a>best_nrounds <span class="ot">&lt;-</span> <span class="fu">which.min</span>(xgb_cv<span class="sc">$</span>evaluation_log<span class="sc">$</span>test_rmse_mean)</span>
+<span id="cb38-39"><a href="#cb38-39" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Best nrounds:"</span>, best_nrounds, <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Best nrounds: 64 </code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb40"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb40-1"><a href="#cb40-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Train final XGBoost model</span></span>
+<span id="cb40-2"><a href="#cb40-2" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">42</span>)</span>
+<span id="cb40-3"><a href="#cb40-3" aria-hidden="true" tabindex="-1"></a>xgb_model <span class="ot">&lt;-</span> <span class="fu">xgb.train</span>(</span>
+<span id="cb40-4"><a href="#cb40-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">data    =</span> dtrain,</span>
+<span id="cb40-5"><a href="#cb40-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">nrounds =</span> best_nrounds,</span>
+<span id="cb40-6"><a href="#cb40-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">params  =</span> <span class="fu">list</span>(</span>
+<span id="cb40-7"><a href="#cb40-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">objective        =</span> <span class="st">"reg:squarederror"</span>,</span>
+<span id="cb40-8"><a href="#cb40-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">eta              =</span> <span class="fl">0.1</span>,</span>
+<span id="cb40-9"><a href="#cb40-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">max_depth        =</span> <span class="dv">6</span>,</span>
+<span id="cb40-10"><a href="#cb40-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">subsample        =</span> <span class="fl">0.8</span>,</span>
+<span id="cb40-11"><a href="#cb40-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">colsample_bytree =</span> <span class="fl">0.8</span></span>
+<span id="cb40-12"><a href="#cb40-12" aria-hidden="true" tabindex="-1"></a>  ),</span>
+<span id="cb40-13"><a href="#cb40-13" aria-hidden="true" tabindex="-1"></a>  <span class="at">verbose =</span> <span class="dv">0</span></span>
+<span id="cb40-14"><a href="#cb40-14" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb40-15"><a href="#cb40-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb40-16"><a href="#cb40-16" aria-hidden="true" tabindex="-1"></a><span class="co"># XGBoost test predictions</span></span>
+<span id="cb40-17"><a href="#cb40-17" aria-hidden="true" tabindex="-1"></a>xgb_preds_log  <span class="ot">&lt;-</span> <span class="fu">predict</span>(xgb_model, dtest)</span>
+<span id="cb40-18"><a href="#cb40-18" aria-hidden="true" tabindex="-1"></a>xgb_preds_orig <span class="ot">&lt;-</span> <span class="fu">expm1</span>(xgb_preds_log)</span>
+<span id="cb40-19"><a href="#cb40-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb40-20"><a href="#cb40-20" aria-hidden="true" tabindex="-1"></a>xgb_rmse_log  <span class="ot">&lt;-</span> <span class="fu">rmse</span>(y_test,      xgb_preds_log)</span>
+<span id="cb40-21"><a href="#cb40-21" aria-hidden="true" tabindex="-1"></a>xgb_rmse_orig <span class="ot">&lt;-</span> <span class="fu">rmse</span>(actual_orig,  xgb_preds_orig)</span>
+<span id="cb40-22"><a href="#cb40-22" aria-hidden="true" tabindex="-1"></a>xgb_r2        <span class="ot">&lt;-</span> <span class="fu">cor</span>(y_test,       xgb_preds_log)<span class="sc">^</span><span class="dv">2</span></span>
+<span id="cb40-23"><a href="#cb40-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb40-24"><a href="#cb40-24" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"XGB | RMSE (log): %.4f | R²: %.4f | RMSE (orig): %.1f</span><span class="sc">\n</span><span class="st">"</span>,</span>
+<span id="cb40-25"><a href="#cb40-25" aria-hidden="true" tabindex="-1"></a>            xgb_rmse_log, xgb_r2, xgb_rmse_orig))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>XGB | RMSE (log): 2.6993 | R²: 0.3137 | RMSE (orig): 50976.7</code></pre>
+</div>
+</div>
+</section>
+<section id="model-comparison" class="level3">
+<h3 class="anchored" data-anchor-id="model-comparison">4.3 Model Comparison</h3>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb42"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb42-1"><a href="#cb42-1" aria-hidden="true" tabindex="-1"></a>results <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb42-2"><a href="#cb42-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">Model               =</span> <span class="fu">c</span>(<span class="st">"Random Forest"</span>, <span class="st">"XGBoost"</span>),</span>
+<span id="cb42-3"><a href="#cb42-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">RMSE_log            =</span> <span class="fu">round</span>(<span class="fu">c</span>(rf_rmse_log,   xgb_rmse_log),  <span class="dv">4</span>),</span>
+<span id="cb42-4"><a href="#cb42-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">R2                  =</span> <span class="fu">round</span>(<span class="fu">c</span>(rf_r2,          xgb_r2),         <span class="dv">4</span>),</span>
+<span id="cb42-5"><a href="#cb42-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">RMSE_original_scale =</span> <span class="fu">round</span>(<span class="fu">c</span>(rf_rmse_orig,   xgb_rmse_orig),  <span class="dv">1</span>)</span>
+<span id="cb42-6"><a href="#cb42-6" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb42-7"><a href="#cb42-7" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(results)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>          Model RMSE_log     R2 RMSE_original_scale
+1 Random Forest   2.7704 0.3014             62270.1
+2       XGBoost   2.6993 0.3137             50976.7</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb44"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb44-1"><a href="#cb44-1" aria-hidden="true" tabindex="-1"></a><span class="co"># XGBoost is our primary model — use it for all downstream analysis</span></span>
+<span id="cb44-2"><a href="#cb44-2" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"</span><span class="sc">\n</span><span class="st">Primary model: XGBoost</span><span class="sc">\n</span><span class="st">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+Primary model: XGBoost</code></pre>
+</div>
+</div>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb46"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb46-1"><a href="#cb46-1" aria-hidden="true" tabindex="-1"></a>plot_df <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="at">Actual =</span> actual_orig, <span class="at">Predicted =</span> xgb_preds_orig)</span>
+<span id="cb46-2"><a href="#cb46-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb46-3"><a href="#cb46-3" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(plot_df, <span class="fu">aes</span>(<span class="at">x =</span> Actual, <span class="at">y =</span> Predicted)) <span class="sc">+</span></span>
+<span id="cb46-4"><a href="#cb46-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="at">alpha =</span> <span class="fl">0.4</span>, <span class="at">color =</span> <span class="st">"steelblue"</span>) <span class="sc">+</span></span>
+<span id="cb46-5"><a href="#cb46-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_abline</span>(<span class="at">intercept =</span> <span class="dv">0</span>, <span class="at">slope =</span> <span class="dv">1</span>, <span class="at">color =</span> <span class="st">"red"</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>) <span class="sc">+</span></span>
+<span id="cb46-6"><a href="#cb46-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Actual vs Predicted Wage — XGBoost"</span>,</span>
+<span id="cb46-7"><a href="#cb46-7" aria-hidden="true" tabindex="-1"></a>       <span class="at">x =</span> <span class="st">"Actual Wage"</span>, <span class="at">y =</span> <span class="st">"Predicted Wage"</span>) <span class="sc">+</span></span>
+<span id="cb46-8"><a href="#cb46-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="Assigment_files/figure-html/prediction-plot-1.png" class="img-fluid figure-img" width="672"></p>
+</figure>
+</div>
+</div>
+</div>
+<hr>
+</section>
+</section>
+<section id="model-explainability" class="level2">
+<h2 class="anchored" data-anchor-id="model-explainability">5. Model Explainability</h2>
+<p>We use two complementary techniques:</p>
+<ul>
+<li><strong>XGBoost Feature Importance</strong>: Which features contribute most globally</li>
+<li><strong>DALEX</strong>: Partial dependence profiles and SHAP break-down for individual predictions</li>
+</ul>
+<section id="feature-importance" class="level3">
+<h3 class="anchored" data-anchor-id="feature-importance">5.1 Feature Importance</h3>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb47"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb47-1"><a href="#cb47-1" aria-hidden="true" tabindex="-1"></a>importance_matrix <span class="ot">&lt;-</span> <span class="fu">xgb.importance</span>(<span class="at">model =</span> xgb_model)</span>
+<span id="cb47-2"><a href="#cb47-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb47-3"><a href="#cb47-3" aria-hidden="true" tabindex="-1"></a><span class="fu">xgb.plot.importance</span>(importance_matrix[<span class="dv">1</span><span class="sc">:</span><span class="dv">20</span>, ],</span>
+<span id="cb47-4"><a href="#cb47-4" aria-hidden="true" tabindex="-1"></a>                    <span class="at">main =</span> <span class="st">"Top 20 Feature Importances — XGBoost"</span>,</span>
+<span id="cb47-5"><a href="#cb47-5" aria-hidden="true" tabindex="-1"></a>                    <span class="at">col  =</span> <span class="st">"steelblue"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="Assigment_files/figure-html/vip-plot-1.png" class="img-fluid figure-img" width="768"></p>
+</figure>
+</div>
+</div>
+</div>
+</section>
+<section id="dalex-explainer" class="level3">
+<h3 class="anchored" data-anchor-id="dalex-explainer">5.2 DALEX Explainer</h3>
+<p>DALEX wraps our XGBoost model and provides a unified interface for explainability techniques.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb48"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb48-1"><a href="#cb48-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Custom predict function returning predictions in original scale</span></span>
+<span id="cb48-2"><a href="#cb48-2" aria-hidden="true" tabindex="-1"></a>xgb_predict_fun <span class="ot">&lt;-</span> <span class="cf">function</span>(model, newdata) {</span>
+<span id="cb48-3"><a href="#cb48-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">predict</span>(model, <span class="fu">xgb.DMatrix</span>(<span class="fu">as.matrix</span>(newdata)))</span>
+<span id="cb48-4"><a href="#cb48-4" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb48-5"><a href="#cb48-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb48-6"><a href="#cb48-6" aria-hidden="true" tabindex="-1"></a>explainer <span class="ot">&lt;-</span> DALEX<span class="sc">::</span><span class="fu">explain</span>(</span>
+<span id="cb48-7"><a href="#cb48-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">model            =</span> xgb_model,</span>
+<span id="cb48-8"><a href="#cb48-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">data             =</span> <span class="fu">as.data.frame</span>(X_test),</span>
+<span id="cb48-9"><a href="#cb48-9" aria-hidden="true" tabindex="-1"></a>  <span class="at">y                =</span> y_test,</span>
+<span id="cb48-10"><a href="#cb48-10" aria-hidden="true" tabindex="-1"></a>  <span class="at">predict_function =</span> xgb_predict_fun,</span>
+<span id="cb48-11"><a href="#cb48-11" aria-hidden="true" tabindex="-1"></a>  <span class="at">label            =</span> <span class="st">"XGBoost"</span>,</span>
+<span id="cb48-12"><a href="#cb48-12" aria-hidden="true" tabindex="-1"></a>  <span class="at">verbose          =</span> <span class="cn">TRUE</span>   <span class="co"># change to TRUE temporarily to see any warnings</span></span>
+<span id="cb48-13"><a href="#cb48-13" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Preparation of a new explainer is initiated
+  -&gt; model label       :  XGBoost 
+  -&gt; data              :  2160  rows  260  cols 
+  -&gt; target variable   :  2160  values 
+  -&gt; predict function  :  xgb_predict_fun 
+  -&gt; predicted values  :  No value for predict function target column. (  default  )
+  -&gt; model_info        :  package Model of class: xgb.Booster package unrecognized , ver. Unknown , task regression (  default  ) 
+  -&gt; predicted values  :  numerical, min =  2.991492 , mean =  9.480528 , max =  12.23818  
+  -&gt; residual function :  difference between y and yhat (  default  )
+  -&gt; residuals         :  numerical, min =  -11.26572 , mean =  -0.05501235 , max =  6.58654  
+  A new explainer has been created!  </code></pre>
+</div>
+</div>
+</section>
+<section id="model-performance-residuals" class="level3">
+<h3 class="anchored" data-anchor-id="model-performance-residuals">5.3 Model Performance (Residuals)</h3>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb50"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb50-1"><a href="#cb50-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Calculate residuals manually</span></span>
+<span id="cb50-2"><a href="#cb50-2" aria-hidden="true" tabindex="-1"></a>residuals_df <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb50-3"><a href="#cb50-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">actual    =</span> actual_orig,</span>
+<span id="cb50-4"><a href="#cb50-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">predicted =</span> xgb_preds_orig,</span>
+<span id="cb50-5"><a href="#cb50-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">residual  =</span> actual_orig <span class="sc">-</span> xgb_preds_orig</span>
+<span id="cb50-6"><a href="#cb50-6" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb50-7"><a href="#cb50-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb50-8"><a href="#cb50-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Residuals vs Predicted</span></span>
+<span id="cb50-9"><a href="#cb50-9" aria-hidden="true" tabindex="-1"></a>p1 <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(residuals_df, <span class="fu">aes</span>(<span class="at">x =</span> predicted, <span class="at">y =</span> residual)) <span class="sc">+</span></span>
+<span id="cb50-10"><a href="#cb50-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="at">alpha =</span> <span class="fl">0.3</span>, <span class="at">color =</span> <span class="st">"steelblue"</span>) <span class="sc">+</span></span>
+<span id="cb50-11"><a href="#cb50-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_hline</span>(<span class="at">yintercept =</span> <span class="dv">0</span>, <span class="at">color =</span> <span class="st">"red"</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>) <span class="sc">+</span></span>
+<span id="cb50-12"><a href="#cb50-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Residuals vs Predicted"</span>, <span class="at">x =</span> <span class="st">"Predicted Wage"</span>, <span class="at">y =</span> <span class="st">"Residual"</span>) <span class="sc">+</span></span>
+<span id="cb50-13"><a href="#cb50-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span>
+<span id="cb50-14"><a href="#cb50-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb50-15"><a href="#cb50-15" aria-hidden="true" tabindex="-1"></a><span class="co"># Distribution of residuals</span></span>
+<span id="cb50-16"><a href="#cb50-16" aria-hidden="true" tabindex="-1"></a>p2 <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(residuals_df, <span class="fu">aes</span>(<span class="at">x =</span> residual)) <span class="sc">+</span></span>
+<span id="cb50-17"><a href="#cb50-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_histogram</span>(<span class="at">fill =</span> <span class="st">"steelblue"</span>, <span class="at">bins =</span> <span class="dv">40</span>, <span class="at">alpha =</span> <span class="fl">0.8</span>) <span class="sc">+</span></span>
+<span id="cb50-18"><a href="#cb50-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_vline</span>(<span class="at">xintercept =</span> <span class="dv">0</span>, <span class="at">color =</span> <span class="st">"red"</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>) <span class="sc">+</span></span>
+<span id="cb50-19"><a href="#cb50-19" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Distribution of Residuals"</span>, <span class="at">x =</span> <span class="st">"Residual"</span>, <span class="at">y =</span> <span class="st">"Count"</span>) <span class="sc">+</span></span>
+<span id="cb50-20"><a href="#cb50-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span>
+<span id="cb50-21"><a href="#cb50-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb50-22"><a href="#cb50-22" aria-hidden="true" tabindex="-1"></a>gridExtra<span class="sc">::</span><span class="fu">grid.arrange</span>(p1, p2, <span class="at">ncol =</span> <span class="dv">2</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="Assigment_files/figure-html/dalex-performance-1.png" class="img-fluid figure-img" width="768"></p>
+</figure>
+</div>
+</div>
+</div>
+</section>
+<section id="partial-dependence-profiles" class="level3">
+<h3 class="anchored" data-anchor-id="partial-dependence-profiles">5.4 Partial Dependence Profiles</h3>
+<p>PDPs show how the predicted wage changes as a single feature varies, holding all others constant.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb51"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb51-1"><a href="#cb51-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Top 5 features by importance</span></span>
+<span id="cb51-2"><a href="#cb51-2" aria-hidden="true" tabindex="-1"></a>top_features <span class="ot">&lt;-</span> importance_matrix<span class="sc">$</span>Feature[<span class="dv">1</span><span class="sc">:</span><span class="dv">5</span>]</span>
+<span id="cb51-3"><a href="#cb51-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb51-4"><a href="#cb51-4" aria-hidden="true" tabindex="-1"></a>pdp_profiles <span class="ot">&lt;-</span> <span class="fu">model_profile</span>(</span>
+<span id="cb51-5"><a href="#cb51-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">explainer =</span> explainer,</span>
+<span id="cb51-6"><a href="#cb51-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">variables =</span> top_features,</span>
+<span id="cb51-7"><a href="#cb51-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">type      =</span> <span class="st">"partial"</span></span>
+<span id="cb51-8"><a href="#cb51-8" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb51-9"><a href="#cb51-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb51-10"><a href="#cb51-10" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(pdp_profiles) <span class="sc">+</span></span>
+<span id="cb51-11"><a href="#cb51-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Partial Dependence Profiles (Top 5 Features)"</span>) <span class="sc">+</span></span>
+<span id="cb51-12"><a href="#cb51-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="Assigment_files/figure-html/pdp-1.png" class="img-fluid figure-img" width="960"></p>
+</figure>
+</div>
+</div>
+</div>
+</section>
+<section id="shap-break-down-for-one-prediction" class="level3">
+<h3 class="anchored" data-anchor-id="shap-break-down-for-one-prediction">5.5 SHAP Break-Down for One Prediction</h3>
+<p>We examine a single observation to understand exactly how each feature pushed the prediction up or down.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb52"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb52-1"><a href="#cb52-1" aria-hidden="true" tabindex="-1"></a>obs_to_explain <span class="ot">&lt;-</span> <span class="fu">as.data.frame</span>(X_test)[<span class="dv">1</span>, , drop <span class="ot">=</span> <span class="cn">FALSE</span>]</span>
+<span id="cb52-2"><a href="#cb52-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb52-3"><a href="#cb52-3" aria-hidden="true" tabindex="-1"></a>bd <span class="ot">&lt;-</span> <span class="fu">predict_parts</span>(</span>
+<span id="cb52-4"><a href="#cb52-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">explainer       =</span> explainer,</span>
+<span id="cb52-5"><a href="#cb52-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">new_observation =</span> obs_to_explain,</span>
+<span id="cb52-6"><a href="#cb52-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">type            =</span> <span class="st">"break_down"</span></span>
+<span id="cb52-7"><a href="#cb52-7" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb52-8"><a href="#cb52-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb52-9"><a href="#cb52-9" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(bd) <span class="sc">+</span></span>
+<span id="cb52-10"><a href="#cb52-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Break-Down Explanation for One Observation"</span>) <span class="sc">+</span></span>
+<span id="cb52-11"><a href="#cb52-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="Assigment_files/figure-html/shap-breakdown-1.png" class="img-fluid figure-img" width="864"></p>
+</figure>
+</div>
+</div>
+</div>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb53"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb53-1"><a href="#cb53-1" aria-hidden="true" tabindex="-1"></a>shap_vals <span class="ot">&lt;-</span> <span class="fu">predict_parts</span>(</span>
+<span id="cb53-2"><a href="#cb53-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">explainer       =</span> explainer,</span>
+<span id="cb53-3"><a href="#cb53-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">new_observation =</span> obs_to_explain,</span>
+<span id="cb53-4"><a href="#cb53-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">type            =</span> <span class="st">"shap"</span>,</span>
+<span id="cb53-5"><a href="#cb53-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">B               =</span> <span class="dv">10</span></span>
+<span id="cb53-6"><a href="#cb53-6" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb53-7"><a href="#cb53-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb53-8"><a href="#cb53-8" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(shap_vals) <span class="sc">+</span></span>
+<span id="cb53-9"><a href="#cb53-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"SHAP Values for One Observation"</span>) <span class="sc">+</span></span>
+<span id="cb53-10"><a href="#cb53-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="Assigment_files/figure-html/shap-values-1.png" class="img-fluid figure-img" width="864"></p>
+</figure>
+</div>
+</div>
+</div>
+<hr>
+</section>
+</section>
+<section id="wage-prediction-for-team-members" class="level2">
+<h2 class="anchored" data-anchor-id="wage-prediction-for-team-members">6. Wage Prediction for Team Members</h2>
+<p>Since XGBoost uses one-hot encoded columns, we build team profiles directly using the dummy column names. All columns default to 0 (not selected), and we set relevant ones to 1.</p>
+<p><strong>Available age buckets</strong>: 18.21, 22.24, 25.29, 30.34, 35.39, 40.44, 45.49, 50.54, 55.59, 60.69</p>
+<p><strong>Available experience buckets</strong>: 0.1, 1.2, 2.3, 3.4, 4.5, 5.11, 11.15, 15.20, 20.25, 25.30, 30..</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb54"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb54-1"><a href="#cb54-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Build a zero-filled template with all XGBoost columns</span></span>
+<span id="cb54-2"><a href="#cb54-2" aria-hidden="true" tabindex="-1"></a>template_xgb <span class="ot">&lt;-</span> <span class="fu">as.data.frame</span>(<span class="fu">matrix</span>(<span class="dv">0</span>, <span class="at">nrow =</span> <span class="dv">1</span>, <span class="at">ncol =</span> <span class="fu">ncol</span>(X_train)))</span>
+<span id="cb54-3"><a href="#cb54-3" aria-hidden="true" tabindex="-1"></a><span class="fu">colnames</span>(template_xgb) <span class="ot">&lt;-</span> <span class="fu">colnames</span>(X_train)</span>
+<span id="cb54-4"><a href="#cb54-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb54-5"><a href="#cb54-5" aria-hidden="true" tabindex="-1"></a>make_xgb_profile <span class="ot">&lt;-</span> <span class="cf">function</span>(template, settings) {</span>
+<span id="cb54-6"><a href="#cb54-6" aria-hidden="true" tabindex="-1"></a>  profile <span class="ot">&lt;-</span> template</span>
+<span id="cb54-7"><a href="#cb54-7" aria-hidden="true" tabindex="-1"></a>  <span class="cf">for</span> (col <span class="cf">in</span> <span class="fu">names</span>(settings)) {</span>
+<span id="cb54-8"><a href="#cb54-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> (col <span class="sc">%in%</span> <span class="fu">colnames</span>(profile)) {</span>
+<span id="cb54-9"><a href="#cb54-9" aria-hidden="true" tabindex="-1"></a>      profile[[col]] <span class="ot">&lt;-</span> settings[[col]]</span>
+<span id="cb54-10"><a href="#cb54-10" aria-hidden="true" tabindex="-1"></a>    } <span class="cf">else</span> {</span>
+<span id="cb54-11"><a href="#cb54-11" aria-hidden="true" tabindex="-1"></a>      <span class="fu">warning</span>(<span class="fu">paste</span>(<span class="st">"Column not found:"</span>, col))</span>
+<span id="cb54-12"><a href="#cb54-12" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb54-13"><a href="#cb54-13" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb54-14"><a href="#cb54-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">return</span>(profile)</span>
+<span id="cb54-15"><a href="#cb54-15" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb54-16"><a href="#cb54-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb54-17"><a href="#cb54-17" aria-hidden="true" tabindex="-1"></a><span class="co"># ---- Team Member 1 ---- (edit these values!)</span></span>
+<span id="cb54-18"><a href="#cb54-18" aria-hidden="true" tabindex="-1"></a>member1 <span class="ot">&lt;-</span> <span class="fu">make_xgb_profile</span>(template_xgb, <span class="fu">list</span>(</span>
+<span id="cb54-19"><a href="#cb54-19" aria-hidden="true" tabindex="-1"></a>  <span class="at">age.25.29                          =</span> <span class="dv">1</span>,</span>
+<span id="cb54-20"><a href="#cb54-20" aria-hidden="true" tabindex="-1"></a>  <span class="at">gender.Male                        =</span> <span class="dv">1</span>,</span>
+<span id="cb54-21"><a href="#cb54-21" aria-hidden="true" tabindex="-1"></a>  <span class="at">country.Switzerland                =</span> <span class="dv">1</span>,</span>
+<span id="cb54-22"><a href="#cb54-22" aria-hidden="true" tabindex="-1"></a>  <span class="at">education.Master.s.degree          =</span> <span class="dv">1</span>,</span>
+<span id="cb54-23"><a href="#cb54-23" aria-hidden="true" tabindex="-1"></a>  <span class="at">job_role.Data.Scientist            =</span> <span class="dv">1</span>,</span>
+<span id="cb54-24"><a href="#cb54-24" aria-hidden="true" tabindex="-1"></a>  <span class="at">years_experience.1.2               =</span> <span class="dv">1</span>,</span>
+<span id="cb54-25"><a href="#cb54-25" aria-hidden="true" tabindex="-1"></a>  <span class="at">Programming_Python                 =</span> <span class="dv">1</span>,</span>
+<span id="cb54-26"><a href="#cb54-26" aria-hidden="true" tabindex="-1"></a>  <span class="at">Programming_R                      =</span> <span class="dv">1</span>,</span>
+<span id="cb54-27"><a href="#cb54-27" aria-hidden="true" tabindex="-1"></a>  <span class="at">Programming_SQL                    =</span> <span class="dv">1</span>,</span>
+<span id="cb54-28"><a href="#cb54-28" aria-hidden="true" tabindex="-1"></a>  <span class="at">ML_atwork.We.recently.started.using.ML.methods..i.e...models.in.production.for.less.than.2.years. =</span> <span class="dv">1</span></span>
+<span id="cb54-29"><a href="#cb54-29" aria-hidden="true" tabindex="-1"></a>))</span>
+<span id="cb54-30"><a href="#cb54-30" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb54-31"><a href="#cb54-31" aria-hidden="true" tabindex="-1"></a><span class="co"># ---- Team Member 2 ---- (edit these values!)</span></span>
+<span id="cb54-32"><a href="#cb54-32" aria-hidden="true" tabindex="-1"></a>member2 <span class="ot">&lt;-</span> <span class="fu">make_xgb_profile</span>(template_xgb, <span class="fu">list</span>(</span>
+<span id="cb54-33"><a href="#cb54-33" aria-hidden="true" tabindex="-1"></a>  <span class="at">age.25.29                          =</span> <span class="dv">1</span>,</span>
+<span id="cb54-34"><a href="#cb54-34" aria-hidden="true" tabindex="-1"></a>  <span class="at">gender.Female                      =</span> <span class="dv">1</span>,</span>
+<span id="cb54-35"><a href="#cb54-35" aria-hidden="true" tabindex="-1"></a>  <span class="at">country.Germany                    =</span> <span class="dv">1</span>,</span>
+<span id="cb54-36"><a href="#cb54-36" aria-hidden="true" tabindex="-1"></a>  <span class="at">education.Master.s.degree          =</span> <span class="dv">1</span>,</span>
+<span id="cb54-37"><a href="#cb54-37" aria-hidden="true" tabindex="-1"></a>  <span class="at">job_role.Data.Analyst              =</span> <span class="dv">1</span>,</span>
+<span id="cb54-38"><a href="#cb54-38" aria-hidden="true" tabindex="-1"></a>  <span class="at">years_experience.2.3               =</span> <span class="dv">1</span>,</span>
+<span id="cb54-39"><a href="#cb54-39" aria-hidden="true" tabindex="-1"></a>  <span class="at">Programming_Python                 =</span> <span class="dv">1</span>,</span>
+<span id="cb54-40"><a href="#cb54-40" aria-hidden="true" tabindex="-1"></a>  <span class="at">Programming_SQL                    =</span> <span class="dv">1</span>,</span>
+<span id="cb54-41"><a href="#cb54-41" aria-hidden="true" tabindex="-1"></a>  <span class="at">ML_atwork.We.use.ML.methods.for.generating.insights..but.do.not.put.working.models.into.production. =</span> <span class="dv">1</span></span>
+<span id="cb54-42"><a href="#cb54-42" aria-hidden="true" tabindex="-1"></a>))</span>
+<span id="cb54-43"><a href="#cb54-43" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb54-44"><a href="#cb54-44" aria-hidden="true" tabindex="-1"></a><span class="co"># ---- Team Member 3 ---- (edit these values!)</span></span>
+<span id="cb54-45"><a href="#cb54-45" aria-hidden="true" tabindex="-1"></a>member3 <span class="ot">&lt;-</span> <span class="fu">make_xgb_profile</span>(template_xgb, <span class="fu">list</span>(</span>
+<span id="cb54-46"><a href="#cb54-46" aria-hidden="true" tabindex="-1"></a>  <span class="at">age.30.34                          =</span> <span class="dv">1</span>,</span>
+<span id="cb54-47"><a href="#cb54-47" aria-hidden="true" tabindex="-1"></a>  <span class="at">gender.Male                        =</span> <span class="dv">1</span>,</span>
+<span id="cb54-48"><a href="#cb54-48" aria-hidden="true" tabindex="-1"></a>  <span class="at">country.France                     =</span> <span class="dv">1</span>,</span>
+<span id="cb54-49"><a href="#cb54-49" aria-hidden="true" tabindex="-1"></a>  <span class="at">education.Doctoral.degree          =</span> <span class="dv">1</span>,</span>
+<span id="cb54-50"><a href="#cb54-50" aria-hidden="true" tabindex="-1"></a>  <span class="at">job_role.Research.Scientist        =</span> <span class="dv">1</span>,</span>
+<span id="cb54-51"><a href="#cb54-51" aria-hidden="true" tabindex="-1"></a>  <span class="at">years_experience.4.5               =</span> <span class="dv">1</span>,</span>
+<span id="cb54-52"><a href="#cb54-52" aria-hidden="true" tabindex="-1"></a>  <span class="at">Programming_Python                 =</span> <span class="dv">1</span>,</span>
+<span id="cb54-53"><a href="#cb54-53" aria-hidden="true" tabindex="-1"></a>  <span class="at">Programming_R                      =</span> <span class="dv">1</span>,</span>
+<span id="cb54-54"><a href="#cb54-54" aria-hidden="true" tabindex="-1"></a>  <span class="at">ML_framework_TensorFlow            =</span> <span class="dv">1</span>,</span>
+<span id="cb54-55"><a href="#cb54-55" aria-hidden="true" tabindex="-1"></a>  <span class="at">ML_atwork.We.have.well.established.ML.methods..i.e...models.in.production.for.more.than.2.years. =</span> <span class="dv">1</span></span>
+<span id="cb54-56"><a href="#cb54-56" aria-hidden="true" tabindex="-1"></a>))</span>
+<span id="cb54-57"><a href="#cb54-57" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb54-58"><a href="#cb54-58" aria-hidden="true" tabindex="-1"></a><span class="co"># Predict</span></span>
+<span id="cb54-59"><a href="#cb54-59" aria-hidden="true" tabindex="-1"></a>team_profiles  <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(member1, member2, member3)</span>
+<span id="cb54-60"><a href="#cb54-60" aria-hidden="true" tabindex="-1"></a>team_dmatrix   <span class="ot">&lt;-</span> <span class="fu">xgb.DMatrix</span>(<span class="fu">as.matrix</span>(team_profiles))</span>
+<span id="cb54-61"><a href="#cb54-61" aria-hidden="true" tabindex="-1"></a>team_log_preds <span class="ot">&lt;-</span> <span class="fu">predict</span>(xgb_model, team_dmatrix)</span>
+<span id="cb54-62"><a href="#cb54-62" aria-hidden="true" tabindex="-1"></a>team_wage_preds <span class="ot">&lt;-</span> <span class="fu">expm1</span>(team_log_preds)</span>
+<span id="cb54-63"><a href="#cb54-63" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb54-64"><a href="#cb54-64" aria-hidden="true" tabindex="-1"></a>team_results <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb54-65"><a href="#cb54-65" aria-hidden="true" tabindex="-1"></a>  <span class="at">Member           =</span> <span class="fu">c</span>(<span class="st">"Member 1"</span>, <span class="st">"Member 2"</span>, <span class="st">"Member 3"</span>),</span>
+<span id="cb54-66"><a href="#cb54-66" aria-hidden="true" tabindex="-1"></a>  <span class="at">Age              =</span> <span class="fu">c</span>(<span class="st">"25-29"</span>, <span class="st">"25-29"</span>, <span class="st">"30-34"</span>),</span>
+<span id="cb54-67"><a href="#cb54-67" aria-hidden="true" tabindex="-1"></a>  <span class="at">Country          =</span> <span class="fu">c</span>(<span class="st">"Switzerland"</span>, <span class="st">"Germany"</span>, <span class="st">"France"</span>),</span>
+<span id="cb54-68"><a href="#cb54-68" aria-hidden="true" tabindex="-1"></a>  <span class="at">Education        =</span> <span class="fu">c</span>(<span class="st">"Master's"</span>, <span class="st">"Master's"</span>, <span class="st">"PhD"</span>),</span>
+<span id="cb54-69"><a href="#cb54-69" aria-hidden="true" tabindex="-1"></a>  <span class="at">Job_Role         =</span> <span class="fu">c</span>(<span class="st">"Data Scientist"</span>, <span class="st">"Data Analyst"</span>, <span class="st">"Research Scientist"</span>),</span>
+<span id="cb54-70"><a href="#cb54-70" aria-hidden="true" tabindex="-1"></a>  <span class="at">Yrs_Experience   =</span> <span class="fu">c</span>(<span class="st">"1-2"</span>, <span class="st">"2-3"</span>, <span class="st">"4-5"</span>),</span>
+<span id="cb54-71"><a href="#cb54-71" aria-hidden="true" tabindex="-1"></a>  <span class="at">Predicted_Wage   =</span> <span class="fu">round</span>(team_wage_preds, <span class="dv">0</span>)</span>
+<span id="cb54-72"><a href="#cb54-72" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb54-73"><a href="#cb54-73" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb54-74"><a href="#cb54-74" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(team_results)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>    Member   Age     Country Education           Job_Role Yrs_Experience
+1 Member 1 25-29 Switzerland  Master's     Data Scientist            1-2
+2 Member 2 25-29     Germany  Master's       Data Analyst            2-3
+3 Member 3 30-34      France       PhD Research Scientist            4-5
+  Predicted_Wage
+1          38006
+2          32257
+3          49854</code></pre>
+</div>
+</div>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb56"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb56-1"><a href="#cb56-1" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(team_results, <span class="fu">aes</span>(<span class="at">x =</span> Member, <span class="at">y =</span> Predicted_Wage, <span class="at">fill =</span> Member)) <span class="sc">+</span></span>
+<span id="cb56-2"><a href="#cb56-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_col</span>(<span class="at">alpha =</span> <span class="fl">0.85</span>, <span class="at">width =</span> <span class="fl">0.5</span>) <span class="sc">+</span></span>
+<span id="cb56-3"><a href="#cb56-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_text</span>(<span class="fu">aes</span>(<span class="at">label =</span> <span class="fu">paste0</span>(<span class="st">"$"</span>, <span class="fu">format</span>(Predicted_Wage, <span class="at">big.mark =</span> <span class="st">","</span>))),</span>
+<span id="cb56-4"><a href="#cb56-4" aria-hidden="true" tabindex="-1"></a>            <span class="at">vjust =</span> <span class="sc">-</span><span class="fl">0.5</span>, <span class="at">fontface =</span> <span class="st">"bold"</span>) <span class="sc">+</span></span>
+<span id="cb56-5"><a href="#cb56-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_fill_brewer</span>(<span class="at">palette =</span> <span class="st">"Set2"</span>) <span class="sc">+</span></span>
+<span id="cb56-6"><a href="#cb56-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Predicted Wages for Team Members"</span>,</span>
+<span id="cb56-7"><a href="#cb56-7" aria-hidden="true" tabindex="-1"></a>       <span class="at">x =</span> <span class="cn">NULL</span>, <span class="at">y =</span> <span class="st">"Predicted Wage (USD)"</span>) <span class="sc">+</span></span>
+<span id="cb56-8"><a href="#cb56-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>() <span class="sc">+</span></span>
+<span id="cb56-9"><a href="#cb56-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme</span>(<span class="at">legend.position =</span> <span class="st">"none"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="Assigment_files/figure-html/team-plot-1.png" class="img-fluid figure-img" width="672"></p>
+</figure>
+</div>
+</div>
+</div>
+<hr>
+</section>
+<section id="conclusions" class="level2">
+<h2 class="anchored" data-anchor-id="conclusions">7. Conclusions</h2>
+<section id="model-performance" class="level3">
+<h3 class="anchored" data-anchor-id="model-performance">Model Performance</h3>
+<ul>
+<li>We trained <strong>Random Forest</strong> (baseline) and <strong>XGBoost</strong> (primary model)</li>
+<li>XGBoost achieved R² = <strong>0.314</strong> vs Random Forest R² = <strong>0.301</strong> on the test set</li>
+<li>An R² of ~0.31 is expected for this dataset — wages are self-reported, globally diverse, and age/experience are bucketed ranges rather than exact values, all of which add noise</li>
+<li>We log-transformed <code>wage</code> to handle its right-skewed distribution</li>
+</ul>
+</section>
+<section id="feature-decisions" class="level3">
+<h3 class="anchored" data-anchor-id="feature-decisions">Feature Decisions</h3>
+<ul>
+<li><strong>Included</strong>: demographics (age, gender, country), education, experience, job role, industry, programming skills, ML tool usage, cloud platforms, activities, coding time</li>
+<li><strong>Excluded</strong>: Columns with &gt;40% missing values</li>
+<li><strong>Transformed</strong>: All categoricals one-hot encoded for XGBoost; wage log-transformed</li>
+</ul>
+</section>
+<section id="key-drivers-of-wage" class="level3">
+<h3 class="anchored" data-anchor-id="key-drivers-of-wage">Key Drivers of Wage</h3>
+<p>Based on XGBoost feature importance and SHAP values, the top factors driving wages are typically:</p>
+<ul>
+<li><strong>Country</strong> of employment (largest effect — reflects cost of living and market rates)</li>
+<li><strong>Age bucket</strong> and <strong>years of experience</strong></li>
+<li><strong>Job role</strong> (e.g.&nbsp;Chief Officer, Software Engineer vs Student)</li>
+<li><strong>Education level</strong> and <strong>undergraduate major</strong></li>
+<li><strong>Python usage</strong> and ML maturity at work</li>
+</ul>
+</section>
+<section id="team-predictions" class="level3">
+<h3 class="anchored" data-anchor-id="team-predictions">Team Predictions</h3>
+<p>Each team member’s predicted wage reflects their profile’s combination of country, experience, education, and technical skills. These should be interpreted as expected ranges — the model captures population-level patterns from the Kaggle Data Science Survey, not individual-level nuance.</p>
+</section>
+</section>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>

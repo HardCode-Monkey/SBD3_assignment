@@ -1,0 +1,520 @@
+---
+title: "Predictive Modelling for Wages (Python)"
+format: html
+editor: visual
+---
+
+# Predictive Modelling for Wages
+
+## 1. Setup and Libraries
+
+We use `pyreadr` to load the RData file, `pandas` for data manipulation, `scikit-learn` for modelling, `xgboost` for gradient boosting, `shap` for explainability, and `matplotlib` / `seaborn` for visualisation.
+
+```{python setup}
+# Install required packages if needed (run once in terminal):
+# pip install pyreadr pandas numpy scikit-learn xgboost shap matplotlib seaborn
+
+import pyreadr
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import warnings
+warnings.filterwarnings("ignore")
+
+from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import LabelEncoder
+from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.inspection import PartialDependenceDisplay
+import xgboost as xgb
+import shap
+
+# Load the RData file
+result = pyreadr.read_r("data_wage.RData")
+data = result["data"]
+
+print("Dataset dimensions:", data.shape)
+print("\nColumn names:")
+print(data.columns.tolist())
+```
+
+---
+
+## 2. Exploratory Data Analysis (EDA)
+
+```{python eda-overview}
+# Structure overview
+print(data.dtypes)
+print("\n")
+print(data.describe(include="all"))
+```
+
+```{python eda-missing}
+# Missing values per column
+missing = (data.isnull().sum()
+           .reset_index()
+           .rename(columns={"index": "variable", 0: "missing_count"}))
+missing["missing_pct"] = (missing["missing_count"] / len(data) * 100).round(1)
+missing = missing[missing["missing_count"] > 0].sort_values("missing_pct", ascending=False)
+print(missing)
+```
+
+```{python eda-wage-dist, fig.width=10, fig.height=4}
+fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+
+# Raw wage distribution
+axes[0].hist(data["wage"].dropna(), bins=40, color="steelblue", alpha=0.8)
+axes[0].set_title("Distribution of Wage")
+axes[0].set_xlabel("Wage")
+axes[0].set_ylabel("Count")
+
+# Log-transformed wage
+axes[1].hist(np.log1p(data["wage"].dropna()), bins=40, color="darkorange", alpha=0.8)
+axes[1].set_title("Distribution of log(Wage + 1)")
+axes[1].set_xlabel("log(Wage + 1)")
+axes[1].set_ylabel("Count")
+
+plt.tight_layout()
+plt.show()
+```
+
+```{python eda-categorical}
+# Wage by gender
+if "gender" in data.columns:
+    fig, ax = plt.subplots(figsize=(7, 4))
+    data.dropna(subset=["gender", "wage"]).boxplot(
+        column="wage", by="gender", ax=ax
+    )
+    ax.set_title("Wage by Gender")
+    ax.set_xlabel("Gender")
+    ax.set_ylabel("Wage")
+    plt.suptitle("")
+    plt.tight_layout()
+    plt.show()
+
+# Wage by degree
+if "degree" in data.columns:
+    median_wage = (data.dropna(subset=["degree", "wage"])
+                   .groupby("degree")["wage"]
+                   .median()
+                   .sort_values())
+    fig, ax = plt.subplots(figsize=(8, 5))
+    median_wage.plot(kind="barh", ax=ax, color="steelblue", alpha=0.85)
+    ax.set_title("Median Wage by Education Degree")
+    ax.set_xlabel("Median Wage")
+    plt.tight_layout()
+    plt.show()
+
+# Wage by job role
+if "job_role" in data.columns:
+    median_job = (data.dropna(subset=["job_role", "wage"])
+                  .groupby("job_role")["wage"]
+                  .median()
+                  .sort_values())
+    fig, ax = plt.subplots(figsize=(9, 6))
+    median_job.plot(kind="barh", ax=ax, colormap="viridis", alpha=0.85)
+    ax.set_title("Median Wage by Job Role")
+    ax.set_xlabel("Median Wage")
+    plt.tight_layout()
+    plt.show()
+```
+
+```{python eda-correlation}
+# Correlation matrix for numeric variables
+numeric_data = data.select_dtypes(include=[np.number]).dropna()
+if numeric_data.shape[1] > 1:
+    corr = numeric_data.corr()
+    fig, ax = plt.subplots(figsize=(10, 8))
+    sns.heatmap(corr, annot=True, fmt=".2f", cmap="coolwarm",
+                ax=ax, linewidths=0.5, annot_kws={"size": 7})
+    ax.set_title("Correlation Matrix of Numeric Variables")
+    plt.tight_layout()
+    plt.show()
+```
+
+---
+
+## 3. Data Transformation and Cleaning
+
+### 3.1 Feature Selection Rationale
+
+We select features based on:
+1. **Domain relevance**: Variables that intuitively drive wages
+2. **Data quality**: Dropping columns with >40% missing values
+3. **Avoiding leakage**: Excluding any variable that directly encodes wage
+
+```{python cleaning}
+# Step 1: Remove rows where wage is missing
+data_clean = data.dropna(subset=["wage"]).copy()
+print(f"Rows after removing missing wage: {len(data_clean)}")
+
+# Step 2: Drop columns with >40% missing
+threshold = 0.40
+keep_cols = [c for c in data_clean.columns
+             if data_clean[c].isnull().mean() <= threshold]
+data_clean = data_clean[keep_cols]
+print(f"Columns remaining after missing filter: {len(data_clean.columns)}")
+
+# Step 3: Log-transform the target
+data_clean["log_wage"] = np.log1p(data_clean["wage"])
+data_clean = data_clean.drop(columns=["wage"])
+
+# Step 4: Fill remaining missing values
+for col in data_clean.select_dtypes(include=["object", "category"]).columns:
+    data_clean[col] = data_clean[col].fillna("Unknown")
+for col in data_clean.select_dtypes(include=[np.number]).columns:
+    data_clean[col] = data_clean[col].fillna(data_clean[col].median())
+
+print(f"Final clean dataset: {data_clean.shape}")
+```
+
+```{python encoding}
+# Step 5: Encode categorical variables with LabelEncoder
+cat_cols = data_clean.select_dtypes(include=["object", "category"]).columns.tolist()
+print(f"Categorical variables to encode: {cat_cols}")
+
+label_encoders = {}
+for col in cat_cols:
+    le = LabelEncoder()
+    data_clean[col] = le.fit_transform(data_clean[col].astype(str))
+    label_encoders[col] = le   # save for later (team predictions)
+```
+
+### 3.2 Train / Test Split
+
+```{python split}
+X = data_clean.drop(columns=["log_wage"])
+y = data_clean["log_wage"]
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42
+)
+
+print(f"Training samples: {len(X_train)}")
+print(f"Test samples:     {len(X_test)}")
+```
+
+---
+
+## 4. Model Building
+
+### Why Random Forest and XGBoost?
+- Both handle mixed data (numeric + binary flags) without heavy preprocessing
+- Both provide native feature importance for explainability
+- XGBoost is particularly strong with many sparse binary columns (programming language flags)
+- We compare both and select the best performer
+
+### 4.1 Random Forest
+
+```{python random-forest}
+rf_params = {
+    "n_estimators": [100, 300],
+    "max_features": ["sqrt", 0.3, 0.5]
+}
+
+rf_grid = GridSearchCV(
+    RandomForestRegressor(random_state=42, n_jobs=-1),
+    param_grid=rf_params,
+    cv=5,
+    scoring="neg_root_mean_squared_error",
+    verbose=0
+)
+rf_grid.fit(X_train, y_train)
+
+rf_model = rf_grid.best_estimator_
+print("Best RF params:", rf_grid.best_params_)
+print(f"Best CV RMSE (log): {-rf_grid.best_score_:.4f}")
+```
+
+### 4.2 XGBoost
+
+```{python xgboost}
+xgb_params = {
+    "n_estimators":  [100, 200],
+    "max_depth":     [3, 6],
+    "learning_rate": [0.05, 0.1],
+    "subsample":     [0.8]
+}
+
+xgb_grid = GridSearchCV(
+    xgb.XGBRegressor(random_state=42, verbosity=0, n_jobs=-1),
+    param_grid=xgb_params,
+    cv=5,
+    scoring="neg_root_mean_squared_error",
+    verbose=0
+)
+xgb_grid.fit(X_train, y_train)
+
+xgb_model = xgb_grid.best_estimator_
+print("Best XGB params:", xgb_grid.best_params_)
+print(f"Best CV RMSE (log): {-xgb_grid.best_score_:.4f}")
+```
+
+### 4.3 Model Comparison
+
+```{python model-comparison}
+# Predictions on test set
+rf_preds_log  = rf_model.predict(X_test)
+xgb_preds_log = xgb_model.predict(X_test)
+
+def evaluate(name, y_true_log, y_pred_log):
+    rmse_log = np.sqrt(mean_squared_error(y_true_log, y_pred_log))
+    r2       = r2_score(y_true_log, y_pred_log)
+    rmse_orig = np.sqrt(mean_squared_error(np.expm1(y_true_log), np.expm1(y_pred_log)))
+    print(f"{name:20s} | RMSE (log): {rmse_log:.4f} | R²: {r2:.4f} | RMSE (orig): {rmse_orig:.1f}")
+    return rmse_log, r2
+
+print(f"{'Model':20s} | RMSE (log)  | R²      | RMSE (original scale)")
+print("-" * 65)
+rf_rmse,  rf_r2  = evaluate("Random Forest",  y_test, rf_preds_log)
+xgb_rmse, xgb_r2 = evaluate("XGBoost",        y_test, xgb_preds_log)
+
+# Select best model
+if rf_rmse <= xgb_rmse:
+    best_model = rf_model
+    best_name  = "Random Forest"
+    best_preds_log = rf_preds_log
+else:
+    best_model = xgb_model
+    best_name  = "XGBoost"
+    best_preds_log = xgb_preds_log
+
+print(f"\nBest model: {best_name}")
+```
+
+```{python prediction-plot}
+actual_orig    = np.expm1(y_test.values)
+best_preds_orig = np.expm1(best_preds_log)
+
+fig, ax = plt.subplots(figsize=(7, 5))
+ax.scatter(actual_orig, best_preds_orig, alpha=0.4, color="steelblue", s=20)
+lims = [min(actual_orig.min(), best_preds_orig.min()),
+        max(actual_orig.max(), best_preds_orig.max())]
+ax.plot(lims, lims, "r--", linewidth=1.5)
+ax.set_title(f"Actual vs Predicted Wage — {best_name}")
+ax.set_xlabel("Actual Wage")
+ax.set_ylabel("Predicted Wage")
+plt.tight_layout()
+plt.show()
+```
+
+---
+
+## 5. Model Explainability
+
+### 5.1 Feature Importance
+
+```{python feature-importance}
+importances = best_model.feature_importances_
+feat_imp = (pd.Series(importances, index=X_train.columns)
+            .sort_values(ascending=False)
+            .head(20))
+
+fig, ax = plt.subplots(figsize=(9, 6))
+feat_imp.sort_values().plot(kind="barh", ax=ax, color="steelblue", alpha=0.85)
+ax.set_title(f"Top 20 Feature Importances — {best_name}")
+ax.set_xlabel("Importance")
+plt.tight_layout()
+plt.show()
+```
+
+### 5.2 SHAP Values
+
+SHAP (SHapley Additive exPlanations) explains each prediction by attributing a contribution value to every feature. It answers: *"How much did each feature push the prediction up or down?"*
+
+```{python shap-summary}
+explainer_shap = shap.TreeExplainer(best_model)
+shap_values    = explainer_shap.shap_values(X_test)
+
+# Beeswarm / summary plot
+shap.summary_plot(shap_values, X_test, plot_type="dot", max_display=20, show=False)
+plt.title(f"SHAP Summary Plot — {best_name}")
+plt.tight_layout()
+plt.show()
+```
+
+```{python shap-bar}
+# Global bar chart of mean |SHAP|
+shap.summary_plot(shap_values, X_test, plot_type="bar", max_display=20, show=False)
+plt.title(f"Mean |SHAP| Feature Importance — {best_name}")
+plt.tight_layout()
+plt.show()
+```
+
+### 5.3 SHAP Waterfall for One Observation
+
+```{python shap-waterfall}
+# Explain the first test observation
+shap_exp = shap.Explanation(
+    values    = shap_values[0],
+    base_values = explainer_shap.expected_value,
+    data      = X_test.iloc[0].values,
+    feature_names = X_test.columns.tolist()
+)
+
+shap.plots.waterfall(shap_exp, max_display=15, show=False)
+plt.title("SHAP Waterfall — First Test Observation")
+plt.tight_layout()
+plt.show()
+```
+
+### 5.4 Partial Dependence Plots
+
+```{python pdp}
+# Top 3 numeric features by importance
+numeric_features = X_train.select_dtypes(include=[np.number]).columns.tolist()
+top_features = (pd.Series(best_model.feature_importances_, index=X_train.columns)
+                .loc[numeric_features]
+                .sort_values(ascending=False)
+                .head(3)
+                .index.tolist())
+
+if top_features:
+    fig, axes = plt.subplots(1, len(top_features), figsize=(5 * len(top_features), 4))
+    PartialDependenceDisplay.from_estimator(
+        best_model, X_train, top_features,
+        ax=axes if len(top_features) > 1 else [axes],
+        grid_resolution=30
+    )
+    plt.suptitle(f"Partial Dependence Plots — {best_name}", y=1.02)
+    plt.tight_layout()
+    plt.show()
+```
+
+---
+
+## 6. Wage Prediction for Team Members
+
+Fill in your own details below. The column names and values must match the dataset.
+
+```{python team-prediction}
+# -------------------------------------------------------
+# FILL IN YOUR TEAM'S DETAILS HERE
+# -------------------------------------------------------
+
+def make_profile(template_row, overrides, label_encoders, all_columns):
+    """
+    Build a single-row DataFrame matching the model's feature space.
+    template_row: a row from X_train (sets defaults for all features)
+    overrides: dict of {column_name: raw_value} for your personal details
+    """
+    profile = template_row.copy().to_frame().T.reset_index(drop=True)
+    
+    for col, val in overrides.items():
+        if col in profile.columns:
+            if col in label_encoders:
+                # Encode string value using the fitted LabelEncoder
+                le = label_encoders[col]
+                known = list(le.classes_)
+                if str(val) in known:
+                    profile[col] = le.transform([str(val)])[0]
+                else:
+                    profile[col] = 0   # fallback for unseen labels
+            else:
+                profile[col] = val
+    return profile
+
+template_row = X_train.iloc[0]
+
+# ---- Team Member 1 ----
+member1 = make_profile(template_row, {
+    "age":              25,
+    "gender":           "Male",
+    "country":          "Switzerland",
+    "degree":           "Master",
+    "job_role":         "Data Scientist",
+    "years_experience": 2,
+    "Programming_Python": 1,
+    "Programming_R":      1,
+    "Programming_SQL":    1,
+    "ML_atwork":          "Yes"
+}, label_encoders, X_train.columns)
+
+# ---- Team Member 2 ----
+member2 = make_profile(template_row, {
+    "age":              27,
+    "gender":           "Female",
+    "country":          "Germany",
+    "degree":           "Master",
+    "job_role":         "Data Analyst",
+    "years_experience": 3,
+    "Programming_Python": 1,
+    "Programming_SQL":    1,
+    "ML_atwork":          "Yes"
+}, label_encoders, X_train.columns)
+
+# ---- Team Member 3 ----
+member3 = make_profile(template_row, {
+    "age":              30,
+    "gender":           "Male",
+    "country":          "France",
+    "degree":           "PhD",
+    "job_role":         "Machine Learning Engineer",
+    "years_experience": 5,
+    "Programming_Python":       1,
+    "ML_framework_TensorFlow":  1,
+    "ML_atwork":                "Yes"
+}, label_encoders, X_train.columns)
+
+# -------------------------------------------------------
+# Predict
+# -------------------------------------------------------
+team_profiles = pd.concat([member1, member2, member3], ignore_index=True)
+team_log_preds  = best_model.predict(team_profiles)
+team_wage_preds = np.expm1(team_log_preds)
+
+team_results = pd.DataFrame({
+    "Member":           ["Member 1", "Member 2", "Member 3"],
+    "Age":              [25, 27, 30],
+    "Country":          ["Switzerland", "Germany", "France"],
+    "Degree":           ["Master", "Master", "PhD"],
+    "Job Role":         ["Data Scientist", "Data Analyst", "ML Engineer"],
+    "Yrs Experience":   [2, 3, 5],
+    "Predicted Wage":   np.round(team_wage_preds, 0).astype(int)
+})
+
+print(team_results.to_string(index=False))
+```
+
+```{python team-plot}
+fig, ax = plt.subplots(figsize=(7, 4))
+colors = ["#66c2a5", "#fc8d62", "#8da0cb"]
+bars = ax.bar(team_results["Member"], team_results["Predicted Wage"],
+              color=colors, alpha=0.85, width=0.5)
+
+for bar, wage in zip(bars, team_results["Predicted Wage"]):
+    ax.text(bar.get_x() + bar.get_width() / 2,
+            bar.get_height() + 500,
+            f"${wage:,}", ha="center", va="bottom", fontweight="bold")
+
+ax.set_title("Predicted Wages for Team Members")
+ax.set_ylabel("Predicted Wage (USD)")
+ax.set_xlabel("")
+plt.tight_layout()
+plt.show()
+```
+
+---
+
+## 7. Conclusions
+
+### Model Performance
+- We trained **Random Forest** and **XGBoost** with 5-fold cross-validation
+- The best model, **`{python} best_name`**, achieved R² = **`{python} round(max(rf_r2, xgb_r2), 3)`** on the test set
+- We log-transformed `wage` to handle its right-skewed distribution
+
+### Feature Decisions
+- **Included**: demographics (age, gender, country), education (degree), experience, job role, programming skills, ML tool usage
+- **Excluded**: Columns with >40% missing values
+- **Transformed**: Categoricals label-encoded; wage log-transformed
+
+### Key Drivers of Wage
+Based on SHAP values and feature importance, the top wage drivers are typically:
+- **Years of experience** and **age**
+- **Country** of employment
+- **Job role** and **education level**
+- **Python / SQL skills** and ML usage at work
+
+### Team Predictions
+Each team member's predicted wage reflects their combined profile of experience, education, country, and technical skills.
