@@ -590,31 +590,44 @@ Visualization_Plotly = 1
 
 # ---- Team Member 2 ---- (edit these!)
 member2 <- make_xgb_profile(template_xgb, list(
-  age.25.29                          = 1,
-  gender.Female                      = 1,
-  country.Germany                    = 1,
-  education.Master.s.degree          = 1,
-  job_role.Data.Analyst              = 1,
-  years_experience.2.3               = 1,
-  Programming_Python                 = 1,
-  Programming_SQL                    = 1,
-  ML_atwork.We.use.ML.methods.for.generating.insights..but.do.not.put.working.models.into.production. = 1
+  age.22.24                          = 1,
+  gender.Male                      = 1,
+  country.Switzerland                    = 1,
+  education.Bachelor.s.degree          = 1,
+  undergraduate_major.I.never.declared.a.major = 1,
+  job_role.Principal.Investigator = 1,
+  years_experience.0.1 = 1,
+  industry.Military.Security.Defense = 1,
+  Programming_Python = 1,
+  Programming_R = 1,
+  Programming_SQL = 1,
+  Programming_Bash = 1
 ))
 
 
 
 # ---- Team Member 3 ---- (edit these!)
 member3 <- make_xgb_profile(template_xgb, list(
-  age.30.34                          = 1,
-  gender.Male                        = 1,
-  country.France                     = 1,
-  education.Doctoral.degree          = 1,
-  job_role.Research.Scientist        = 1,
-  years_experience.4.5               = 1,
-  Programming_Python                 = 1,
-  Programming_R                      = 1,
-  ML_framework_TensorFlow            = 1,
-  ML_atwork.We.have.well.established.ML.methods..i.e...models.in.production.for.more.than.2.years. = 1
+  age.22.24                          = 1,
+  gender.Male                      = 1,
+  country.Switzerland                    = 1,
+  education.Bachelor.s.degree          = 1,
+  undergraduate_major.Computer.science..software.engineering..etc.. = 1,
+  job_role.Data.Analyst = 1,
+  years_experience.1.2 = 1,
+  industry.Computers.Technology = 1,
+  Programming_Python = 1,
+  Programming_R = 1,
+  Programming_SQL = 1,
+  Programming_Bash = 1,
+  Programming_Javascript.Typescript = 1,
+  ML_framework_PyTorch = 1,
+  ML_framework_Xgboost = 1,
+  ML_framework_randomForest = 1,
+  ML_framework_H20 = 1,
+  Visualization_ggplot2 = 1,
+  Visualization_Shiny = 1,
+Visualization_Plotly = 1
 ))
 
 
@@ -625,7 +638,7 @@ team_log_preds  <- predict(xgb_model, team_dmatrix)
 team_wage_preds <- expm1(team_log_preds)
 
 team_results <- data.frame(
-  Member         = c("Member 1", "Member 2", "Member 3"),
+  Member         = c("Deniz", "Thiraviyachelvam", "Sen"),
   Predicted_Wage = paste0("$", format(round(team_wage_preds, 0), big.mark = ","))
 )
 
@@ -634,7 +647,7 @@ print(team_results)
 
 ```{r team-plot, fig.width=7, fig.height=4}
 team_plot_df <- data.frame(
-  Member = c("Member 1", "Member 2", "Member 3"),
+  Member = c("Deniz", "Thiraviyachelvam", "Sen"),
   Wage   = team_wage_preds
 )
 
@@ -656,8 +669,8 @@ shap_m1 <- predict_parts(
   type            = "shap",
   B               = 15
 )
-plot(shap_m1, max_vars = 25) +
-  labs(title = "SHAP Values — Member 1 (Software Engineer, Switzerland)") +
+plot(shap_m1) +
+  labs(title = "SHAP Values Deniz") +
   theme_minimal()
 ```
 
@@ -669,7 +682,7 @@ shap_m2 <- predict_parts(
   B               = 15
 )
 plot(shap_m2) +
-  labs(title = "SHAP Values — Member 2 (Data Analyst, Germany)") +
+  labs(title = "SHAP Values Thiraviyachelvam") +
   theme_minimal()
 ```
 
@@ -681,7 +694,7 @@ shap_m3 <- predict_parts(
   B               = 15
 )
 plot(shap_m3) +
-  labs(title = "SHAP Values — Member 3 (Research Scientist, France)") +
+  labs(title = "SHAP Values Sen") +
   theme_minimal()
 ```
 

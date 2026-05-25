@@ -772,56 +772,69 @@ Best CV RMSE: 2.6073 at round 335</code></pre>
 <span id="cb45-43"><a href="#cb45-43" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb45-44"><a href="#cb45-44" aria-hidden="true" tabindex="-1"></a><span class="co"># ---- Team Member 2 ---- (edit these!)</span></span>
 <span id="cb45-45"><a href="#cb45-45" aria-hidden="true" tabindex="-1"></a>member2 <span class="ot">&lt;-</span> <span class="fu">make_xgb_profile</span>(template_xgb, <span class="fu">list</span>(</span>
-<span id="cb45-46"><a href="#cb45-46" aria-hidden="true" tabindex="-1"></a>  <span class="at">age.25.29                          =</span> <span class="dv">1</span>,</span>
-<span id="cb45-47"><a href="#cb45-47" aria-hidden="true" tabindex="-1"></a>  <span class="at">gender.Female                      =</span> <span class="dv">1</span>,</span>
-<span id="cb45-48"><a href="#cb45-48" aria-hidden="true" tabindex="-1"></a>  <span class="at">country.Germany                    =</span> <span class="dv">1</span>,</span>
-<span id="cb45-49"><a href="#cb45-49" aria-hidden="true" tabindex="-1"></a>  <span class="at">education.Master.s.degree          =</span> <span class="dv">1</span>,</span>
-<span id="cb45-50"><a href="#cb45-50" aria-hidden="true" tabindex="-1"></a>  <span class="at">job_role.Data.Analyst              =</span> <span class="dv">1</span>,</span>
-<span id="cb45-51"><a href="#cb45-51" aria-hidden="true" tabindex="-1"></a>  <span class="at">years_experience.2.3               =</span> <span class="dv">1</span>,</span>
-<span id="cb45-52"><a href="#cb45-52" aria-hidden="true" tabindex="-1"></a>  <span class="at">Programming_Python                 =</span> <span class="dv">1</span>,</span>
-<span id="cb45-53"><a href="#cb45-53" aria-hidden="true" tabindex="-1"></a>  <span class="at">Programming_SQL                    =</span> <span class="dv">1</span>,</span>
-<span id="cb45-54"><a href="#cb45-54" aria-hidden="true" tabindex="-1"></a>  <span class="at">ML_atwork.We.use.ML.methods.for.generating.insights..but.do.not.put.working.models.into.production. =</span> <span class="dv">1</span></span>
-<span id="cb45-55"><a href="#cb45-55" aria-hidden="true" tabindex="-1"></a>))</span>
-<span id="cb45-56"><a href="#cb45-56" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb45-57"><a href="#cb45-57" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb45-58"><a href="#cb45-58" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb45-59"><a href="#cb45-59" aria-hidden="true" tabindex="-1"></a><span class="co"># ---- Team Member 3 ---- (edit these!)</span></span>
-<span id="cb45-60"><a href="#cb45-60" aria-hidden="true" tabindex="-1"></a>member3 <span class="ot">&lt;-</span> <span class="fu">make_xgb_profile</span>(template_xgb, <span class="fu">list</span>(</span>
-<span id="cb45-61"><a href="#cb45-61" aria-hidden="true" tabindex="-1"></a>  <span class="at">age.30.34                          =</span> <span class="dv">1</span>,</span>
-<span id="cb45-62"><a href="#cb45-62" aria-hidden="true" tabindex="-1"></a>  <span class="at">gender.Male                        =</span> <span class="dv">1</span>,</span>
-<span id="cb45-63"><a href="#cb45-63" aria-hidden="true" tabindex="-1"></a>  <span class="at">country.France                     =</span> <span class="dv">1</span>,</span>
-<span id="cb45-64"><a href="#cb45-64" aria-hidden="true" tabindex="-1"></a>  <span class="at">education.Doctoral.degree          =</span> <span class="dv">1</span>,</span>
-<span id="cb45-65"><a href="#cb45-65" aria-hidden="true" tabindex="-1"></a>  <span class="at">job_role.Research.Scientist        =</span> <span class="dv">1</span>,</span>
-<span id="cb45-66"><a href="#cb45-66" aria-hidden="true" tabindex="-1"></a>  <span class="at">years_experience.4.5               =</span> <span class="dv">1</span>,</span>
-<span id="cb45-67"><a href="#cb45-67" aria-hidden="true" tabindex="-1"></a>  <span class="at">Programming_Python                 =</span> <span class="dv">1</span>,</span>
-<span id="cb45-68"><a href="#cb45-68" aria-hidden="true" tabindex="-1"></a>  <span class="at">Programming_R                      =</span> <span class="dv">1</span>,</span>
-<span id="cb45-69"><a href="#cb45-69" aria-hidden="true" tabindex="-1"></a>  <span class="at">ML_framework_TensorFlow            =</span> <span class="dv">1</span>,</span>
-<span id="cb45-70"><a href="#cb45-70" aria-hidden="true" tabindex="-1"></a>  <span class="at">ML_atwork.We.have.well.established.ML.methods..i.e...models.in.production.for.more.than.2.years. =</span> <span class="dv">1</span></span>
-<span id="cb45-71"><a href="#cb45-71" aria-hidden="true" tabindex="-1"></a>))</span>
-<span id="cb45-72"><a href="#cb45-72" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb45-73"><a href="#cb45-73" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb45-74"><a href="#cb45-74" aria-hidden="true" tabindex="-1"></a><span class="co"># Predict</span></span>
-<span id="cb45-75"><a href="#cb45-75" aria-hidden="true" tabindex="-1"></a>team_profiles   <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(member1, member2, member3)</span>
-<span id="cb45-76"><a href="#cb45-76" aria-hidden="true" tabindex="-1"></a>team_dmatrix    <span class="ot">&lt;-</span> <span class="fu">xgb.DMatrix</span>(<span class="fu">as.matrix</span>(team_profiles))</span>
-<span id="cb45-77"><a href="#cb45-77" aria-hidden="true" tabindex="-1"></a>team_log_preds  <span class="ot">&lt;-</span> <span class="fu">predict</span>(xgb_model, team_dmatrix)</span>
-<span id="cb45-78"><a href="#cb45-78" aria-hidden="true" tabindex="-1"></a>team_wage_preds <span class="ot">&lt;-</span> <span class="fu">expm1</span>(team_log_preds)</span>
-<span id="cb45-79"><a href="#cb45-79" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb45-80"><a href="#cb45-80" aria-hidden="true" tabindex="-1"></a>team_results <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
-<span id="cb45-81"><a href="#cb45-81" aria-hidden="true" tabindex="-1"></a>  <span class="at">Member         =</span> <span class="fu">c</span>(<span class="st">"Member 1"</span>, <span class="st">"Member 2"</span>, <span class="st">"Member 3"</span>),</span>
-<span id="cb45-82"><a href="#cb45-82" aria-hidden="true" tabindex="-1"></a>  <span class="at">Predicted_Wage =</span> <span class="fu">paste0</span>(<span class="st">"$"</span>, <span class="fu">format</span>(<span class="fu">round</span>(team_wage_preds, <span class="dv">0</span>), <span class="at">big.mark =</span> <span class="st">","</span>))</span>
-<span id="cb45-83"><a href="#cb45-83" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb45-84"><a href="#cb45-84" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb45-85"><a href="#cb45-85" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(team_results)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb45-46"><a href="#cb45-46" aria-hidden="true" tabindex="-1"></a>  <span class="at">age.22.24                          =</span> <span class="dv">1</span>,</span>
+<span id="cb45-47"><a href="#cb45-47" aria-hidden="true" tabindex="-1"></a>  <span class="at">gender.Male                      =</span> <span class="dv">1</span>,</span>
+<span id="cb45-48"><a href="#cb45-48" aria-hidden="true" tabindex="-1"></a>  <span class="at">country.Switzerland                    =</span> <span class="dv">1</span>,</span>
+<span id="cb45-49"><a href="#cb45-49" aria-hidden="true" tabindex="-1"></a>  <span class="at">education.Bachelor.s.degree          =</span> <span class="dv">1</span>,</span>
+<span id="cb45-50"><a href="#cb45-50" aria-hidden="true" tabindex="-1"></a>  <span class="at">undergraduate_major.I.never.declared.a.major =</span> <span class="dv">1</span>,</span>
+<span id="cb45-51"><a href="#cb45-51" aria-hidden="true" tabindex="-1"></a>  <span class="at">job_role.Principal.Investigator =</span> <span class="dv">1</span>,</span>
+<span id="cb45-52"><a href="#cb45-52" aria-hidden="true" tabindex="-1"></a>  <span class="at">years_experience.0.1 =</span> <span class="dv">1</span>,</span>
+<span id="cb45-53"><a href="#cb45-53" aria-hidden="true" tabindex="-1"></a>  <span class="at">industry.Military.Security.Defense =</span> <span class="dv">1</span>,</span>
+<span id="cb45-54"><a href="#cb45-54" aria-hidden="true" tabindex="-1"></a>  <span class="at">Programming_Python =</span> <span class="dv">1</span>,</span>
+<span id="cb45-55"><a href="#cb45-55" aria-hidden="true" tabindex="-1"></a>  <span class="at">Programming_R =</span> <span class="dv">1</span>,</span>
+<span id="cb45-56"><a href="#cb45-56" aria-hidden="true" tabindex="-1"></a>  <span class="at">Programming_SQL =</span> <span class="dv">1</span>,</span>
+<span id="cb45-57"><a href="#cb45-57" aria-hidden="true" tabindex="-1"></a>  <span class="at">Programming_Bash =</span> <span class="dv">1</span></span>
+<span id="cb45-58"><a href="#cb45-58" aria-hidden="true" tabindex="-1"></a>))</span>
+<span id="cb45-59"><a href="#cb45-59" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb45-60"><a href="#cb45-60" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb45-61"><a href="#cb45-61" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb45-62"><a href="#cb45-62" aria-hidden="true" tabindex="-1"></a><span class="co"># ---- Team Member 3 ---- (edit these!)</span></span>
+<span id="cb45-63"><a href="#cb45-63" aria-hidden="true" tabindex="-1"></a>member3 <span class="ot">&lt;-</span> <span class="fu">make_xgb_profile</span>(template_xgb, <span class="fu">list</span>(</span>
+<span id="cb45-64"><a href="#cb45-64" aria-hidden="true" tabindex="-1"></a>  <span class="at">age.22.24                          =</span> <span class="dv">1</span>,</span>
+<span id="cb45-65"><a href="#cb45-65" aria-hidden="true" tabindex="-1"></a>  <span class="at">gender.Male                      =</span> <span class="dv">1</span>,</span>
+<span id="cb45-66"><a href="#cb45-66" aria-hidden="true" tabindex="-1"></a>  <span class="at">country.Switzerland                    =</span> <span class="dv">1</span>,</span>
+<span id="cb45-67"><a href="#cb45-67" aria-hidden="true" tabindex="-1"></a>  <span class="at">education.Bachelor.s.degree          =</span> <span class="dv">1</span>,</span>
+<span id="cb45-68"><a href="#cb45-68" aria-hidden="true" tabindex="-1"></a>  <span class="at">undergraduate_major.Computer.science..software.engineering..etc.. =</span> <span class="dv">1</span>,</span>
+<span id="cb45-69"><a href="#cb45-69" aria-hidden="true" tabindex="-1"></a>  <span class="at">job_role.Data.Analyst =</span> <span class="dv">1</span>,</span>
+<span id="cb45-70"><a href="#cb45-70" aria-hidden="true" tabindex="-1"></a>  <span class="at">years_experience.1.2 =</span> <span class="dv">1</span>,</span>
+<span id="cb45-71"><a href="#cb45-71" aria-hidden="true" tabindex="-1"></a>  <span class="at">industry.Computers.Technology =</span> <span class="dv">1</span>,</span>
+<span id="cb45-72"><a href="#cb45-72" aria-hidden="true" tabindex="-1"></a>  <span class="at">Programming_Python =</span> <span class="dv">1</span>,</span>
+<span id="cb45-73"><a href="#cb45-73" aria-hidden="true" tabindex="-1"></a>  <span class="at">Programming_R =</span> <span class="dv">1</span>,</span>
+<span id="cb45-74"><a href="#cb45-74" aria-hidden="true" tabindex="-1"></a>  <span class="at">Programming_SQL =</span> <span class="dv">1</span>,</span>
+<span id="cb45-75"><a href="#cb45-75" aria-hidden="true" tabindex="-1"></a>  <span class="at">Programming_Bash =</span> <span class="dv">1</span>,</span>
+<span id="cb45-76"><a href="#cb45-76" aria-hidden="true" tabindex="-1"></a>  <span class="at">Programming_Javascript.Typescript =</span> <span class="dv">1</span>,</span>
+<span id="cb45-77"><a href="#cb45-77" aria-hidden="true" tabindex="-1"></a>  <span class="at">ML_framework_PyTorch =</span> <span class="dv">1</span>,</span>
+<span id="cb45-78"><a href="#cb45-78" aria-hidden="true" tabindex="-1"></a>  <span class="at">ML_framework_Xgboost =</span> <span class="dv">1</span>,</span>
+<span id="cb45-79"><a href="#cb45-79" aria-hidden="true" tabindex="-1"></a>  <span class="at">ML_framework_randomForest =</span> <span class="dv">1</span>,</span>
+<span id="cb45-80"><a href="#cb45-80" aria-hidden="true" tabindex="-1"></a>  <span class="at">ML_framework_H20 =</span> <span class="dv">1</span>,</span>
+<span id="cb45-81"><a href="#cb45-81" aria-hidden="true" tabindex="-1"></a>  <span class="at">Visualization_ggplot2 =</span> <span class="dv">1</span>,</span>
+<span id="cb45-82"><a href="#cb45-82" aria-hidden="true" tabindex="-1"></a>  <span class="at">Visualization_Shiny =</span> <span class="dv">1</span>,</span>
+<span id="cb45-83"><a href="#cb45-83" aria-hidden="true" tabindex="-1"></a><span class="at">Visualization_Plotly =</span> <span class="dv">1</span></span>
+<span id="cb45-84"><a href="#cb45-84" aria-hidden="true" tabindex="-1"></a>))</span>
+<span id="cb45-85"><a href="#cb45-85" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb45-86"><a href="#cb45-86" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb45-87"><a href="#cb45-87" aria-hidden="true" tabindex="-1"></a><span class="co"># Predict</span></span>
+<span id="cb45-88"><a href="#cb45-88" aria-hidden="true" tabindex="-1"></a>team_profiles   <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(member1, member2, member3)</span>
+<span id="cb45-89"><a href="#cb45-89" aria-hidden="true" tabindex="-1"></a>team_dmatrix    <span class="ot">&lt;-</span> <span class="fu">xgb.DMatrix</span>(<span class="fu">as.matrix</span>(team_profiles))</span>
+<span id="cb45-90"><a href="#cb45-90" aria-hidden="true" tabindex="-1"></a>team_log_preds  <span class="ot">&lt;-</span> <span class="fu">predict</span>(xgb_model, team_dmatrix)</span>
+<span id="cb45-91"><a href="#cb45-91" aria-hidden="true" tabindex="-1"></a>team_wage_preds <span class="ot">&lt;-</span> <span class="fu">expm1</span>(team_log_preds)</span>
+<span id="cb45-92"><a href="#cb45-92" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb45-93"><a href="#cb45-93" aria-hidden="true" tabindex="-1"></a>team_results <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb45-94"><a href="#cb45-94" aria-hidden="true" tabindex="-1"></a>  <span class="at">Member         =</span> <span class="fu">c</span>(<span class="st">"Deniz"</span>, <span class="st">"Thiraviyachelvam"</span>, <span class="st">"Sen"</span>),</span>
+<span id="cb45-95"><a href="#cb45-95" aria-hidden="true" tabindex="-1"></a>  <span class="at">Predicted_Wage =</span> <span class="fu">paste0</span>(<span class="st">"$"</span>, <span class="fu">format</span>(<span class="fu">round</span>(team_wage_preds, <span class="dv">0</span>), <span class="at">big.mark =</span> <span class="st">","</span>))</span>
+<span id="cb45-96"><a href="#cb45-96" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb45-97"><a href="#cb45-97" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb45-98"><a href="#cb45-98" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(team_results)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>    Member Predicted_Wage
-1 Member 1        $56,555
-2 Member 2        $34,356
-3 Member 3        $70,653</code></pre>
+<pre><code>            Member Predicted_Wage
+1            Deniz        $56,555
+2 Thiraviyachelvam        $25,236
+3              Sen        $21,354</code></pre>
 </div>
 </div>
 <div class="cell">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb47"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb47-1"><a href="#cb47-1" aria-hidden="true" tabindex="-1"></a>team_plot_df <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
-<span id="cb47-2"><a href="#cb47-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">Member =</span> <span class="fu">c</span>(<span class="st">"Member 1"</span>, <span class="st">"Member 2"</span>, <span class="st">"Member 3"</span>),</span>
+<span id="cb47-2"><a href="#cb47-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">Member =</span> <span class="fu">c</span>(<span class="st">"Deniz"</span>, <span class="st">"Thiraviyachelvam"</span>, <span class="st">"Sen"</span>),</span>
 <span id="cb47-3"><a href="#cb47-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">Wage   =</span> team_wage_preds</span>
 <span id="cb47-4"><a href="#cb47-4" aria-hidden="true" tabindex="-1"></a>)</span>
 <span id="cb47-5"><a href="#cb47-5" aria-hidden="true" tabindex="-1"></a></span>
@@ -849,8 +862,8 @@ Best CV RMSE: 2.6073 at round 335</code></pre>
 <span id="cb48-4"><a href="#cb48-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">type            =</span> <span class="st">"shap"</span>,</span>
 <span id="cb48-5"><a href="#cb48-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">B               =</span> <span class="dv">15</span></span>
 <span id="cb48-6"><a href="#cb48-6" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb48-7"><a href="#cb48-7" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(shap_m1, <span class="at">max_vars =</span> <span class="dv">25</span>) <span class="sc">+</span></span>
-<span id="cb48-8"><a href="#cb48-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"SHAP Values — Member 1 (Software Engineer, Switzerland)"</span>) <span class="sc">+</span></span>
+<span id="cb48-7"><a href="#cb48-7" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(shap_m1) <span class="sc">+</span></span>
+<span id="cb48-8"><a href="#cb48-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"SHAP Values Deniz"</span>) <span class="sc">+</span></span>
 <span id="cb48-9"><a href="#cb48-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output-display">
 <div>
@@ -868,7 +881,7 @@ Best CV RMSE: 2.6073 at round 335</code></pre>
 <span id="cb49-5"><a href="#cb49-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">B               =</span> <span class="dv">15</span></span>
 <span id="cb49-6"><a href="#cb49-6" aria-hidden="true" tabindex="-1"></a>)</span>
 <span id="cb49-7"><a href="#cb49-7" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(shap_m2) <span class="sc">+</span></span>
-<span id="cb49-8"><a href="#cb49-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"SHAP Values — Member 2 (Data Analyst, Germany)"</span>) <span class="sc">+</span></span>
+<span id="cb49-8"><a href="#cb49-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"SHAP Values Thiraviyachelvam"</span>) <span class="sc">+</span></span>
 <span id="cb49-9"><a href="#cb49-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output-display">
 <div>
@@ -886,7 +899,7 @@ Best CV RMSE: 2.6073 at round 335</code></pre>
 <span id="cb50-5"><a href="#cb50-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">B               =</span> <span class="dv">15</span></span>
 <span id="cb50-6"><a href="#cb50-6" aria-hidden="true" tabindex="-1"></a>)</span>
 <span id="cb50-7"><a href="#cb50-7" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(shap_m3) <span class="sc">+</span></span>
-<span id="cb50-8"><a href="#cb50-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"SHAP Values — Member 3 (Research Scientist, France)"</span>) <span class="sc">+</span></span>
+<span id="cb50-8"><a href="#cb50-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"SHAP Values Sen"</span>) <span class="sc">+</span></span>
 <span id="cb50-9"><a href="#cb50-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output-display">
 <div>
