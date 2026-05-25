@@ -99,6 +99,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </header>
 
 
+<p>In today’s data-driven economy, understanding what drives wages has become increasingly important for both individuals and organisations. Wages depend on a wide range of factors such as country, education, job role, experience, and the technical skills a person brings to the table. Capturing these relationships in a single predictive model is challenging, but it provides valuable insights into how the labour market values different profiles.</p>
+<p>This project explores wage prediction based on a large global survey of data science professionals from Kaggle, containing 10’809 responses across 78 variables. Our goal is to build a model that predicts an individual’s wage based on their demographic, educational, and professional characteristics, and to understand which factors drive these predictions the most.</p>
+<p>To achieve this, we apply XGBoost, a gradient boosting algorithm widely recognised as one of the best methods for tabular data. We complement the model with modern explainability techniques such as SHAP values and Partial Dependence Profiles, allowing us to interpret not only what the model predicts, but also why.</p>
+<p>The project follows a structured workflow. We begin with an exploratory analysis of the dataset to identify patterns and potential predictors. We then clean and transform the data, train and tune the model using cross-validation, and evaluate its performance on a held-out test set. Finally, we apply the model to our own profiles to predict our expected future wages and reflect critically on the results.</p>
+<p>The objectives of this work are threefold: first, to deliver a reliable and well-tuned predictive model; second, to make the model’s decisions transparent and interpretable; and third, to honestly discuss the strengths and limitations of survey-based wage prediction in a global context.</p>
 <section id="setup-and-libraries" class="level2">
 <h2 class="anchored" data-anchor-id="setup-and-libraries">1. Setup and Libraries</h2>
 <p>We use <code>tidyverse</code> for data manipulation, <code>caret</code> for preprocessing, <code>xgboost</code> as our primary model, and <code>DALEX</code> for explainability.</p>
@@ -419,167 +424,124 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <hr>
 </section>
 </section>
-<section id="model-xgboost" class="level2">
-<h2 class="anchored" data-anchor-id="model-xgboost">4. Model: XGBoost</h2>
-<section id="why-xgboost" class="level3">
-<h3 class="anchored" data-anchor-id="why-xgboost">4.1 Why XGBoost?</h3>
-<p>We chose XGBoost (Extreme Gradient Boosting) as our model for the following reasons:</p>
-<ul>
-<li><strong>Best-in-class for tabular data</strong>: XGBoost consistently outperforms other algorithms on structured datasets with mixed feature types</li>
-<li><strong>Handles sparsity natively</strong>: Our dataset has 260+ binary columns (programming languages, tools, activities) — XGBoost is specifically optimised for sparse inputs</li>
-<li><strong>Gradient boosting</strong>: Builds trees sequentially, each correcting the errors of the previous one, making it highly accurate</li>
-<li><strong>Built-in regularisation</strong>: <code>lambda</code>, <code>alpha</code>, <code>gamma</code>, and <code>min_child_weight</code> parameters prevent overfitting on noisy survey data</li>
-<li><strong>SHAP compatibility</strong>: Native SHAP support provides state-of-the-art explainability</li>
-</ul>
-</section>
+<section id="choosing-a-model-which-makes-sense" class="level2">
+<h2 class="anchored" data-anchor-id="choosing-a-model-which-makes-sense">4. Choosing a model which makes sense</h2>
+<p>We tested several models to identify the most suitable approach for our dataset, including Linear Regression, Random Forest, and XGBoost.</p>
+<p>Linear Regression was the first model we evaluated. However, it proved to be a poor fit for this problem. Linear Regression assumes straight-line relationships between features and the target variable, treating every feature’s effect on wage as constant and additive. In reality, wages are far more complex. A Data Scientist in Switzerland with 5 years of experience earns disproportionately more than the sum of those individual factors would suggest. Real-world compensation is influenced by interactions between country, role, experience, and education that a linear model simply cannot capture. Wages do not follow a fixed rulebook, and assuming they do leads to systematic prediction errors.</p>
+<p>Random Forest was the second model we evaluated. While it performed significantly better than Linear Regression, it came with several weaknesses that made it unsuitable for our case.</p>
+<p>The most significant issue was computation time. Training the Random Forest took approximately 25 minutes, which was far too slow for our workflow and made iterating and testing different configurations impractical.</p>
+<p>Additionally, our dataset contains 260+ binary features, the majority of which are zero for any given respondent. This proved to be a fundamental problem for Random Forest. This combination of poor computational efficiency and difficulty handling sparse binary data made Random Forest a less suitable choice compared to XGBoost, which handles both of these issues natively.</p>
+<p>XGBoost builds trees sequentially, meaning each new tree learns from the mistakes of the previous one. This boosting mechanism allows the model to progressively improve its predictions with every iteration, resulting in significantly higher accuracy compared to our previous models.</p>
+<p>XGBoost also handles our 260+ sparse binary features considerably better than Random Forest. Its built-in mechanism for dealing with zero values ensures that uninformative features do not weaken the model, which was a critical issue we encountered with Random Forest.</p>
+<p>Furthermore, XGBoost was significantly faster in terms of computation time. As it allowed us to test multiple configurations and tune hyperparameters efficiently without the 25-minute waiting times we experienced with Random Forest.</p>
+<p>Finally, we discovered that XGBoost offers native SHAP compatibility, which greatly simplified our explainability analysis. This allowed us to not only predict wages accurately but also gain a clear understanding of which features drive each individual prediction a key requirement of this assignment.</p>
 <section id="hyperparameter-tuning" class="level3">
-<h3 class="anchored" data-anchor-id="hyperparameter-tuning">4.2 Hyperparameter Tuning</h3>
-<p>We use <code>xgb.cv</code> with 5-fold cross-validation to find the optimal number of boosting rounds, and tune key parameters to maximise R².</p>
-<p><strong>Parameters explained:</strong></p>
+<h3 class="anchored" data-anchor-id="hyperparameter-tuning">4.1 Hyperparameter Tuning</h3>
+<p>While XGBoost is a powerful algorithm, its default settings are not necessarily optimal for every dataset. This is why we tuned its hyperparameters.</p>
+<p>Through a process of trial and error we tested multiple parameter combinations using 5-fold cross-validation, evaluating each configuration on unseen data to ensure we selected settings that generalise well rather than simply memorising the training data. The parameters we tuned and their final values are:</p>
 <ul>
-<li><code>eta</code> (0.05): Lower learning rate — each tree contributes less, requiring more rounds but producing a more robust model</li>
-<li><code>max_depth</code> (5): Tree depth — controls model complexity; 5 balances expressiveness and overfitting</li>
-<li><code>subsample</code> (0.8): Each tree sees 80% of training rows — adds randomness, reduces overfitting</li>
-<li><code>colsample_bytree</code> (0.7): Each tree sees 70% of features — forces diversity across trees</li>
-<li><code>min_child_weight</code> (5): Minimum observations in a leaf — prevents the model from learning noise in small subgroups</li>
-<li><code>gamma</code> (0.1): Minimum loss reduction to make a split — acts as pruning, improves generalisation</li>
+<li><p><strong><code>eta</code>&nbsp;(0.05)</strong>: The learning rate. Controls how much each tree contributes to the final prediction. A lower value of 0.05 means the model learns slowly and precisely, reducing the risk of overshooting the optimal solution at the cost of requiring more boosting rounds.</p></li>
+<li><p><strong><code>max_depth</code>&nbsp;(5)</strong>: The maximum depth of each tree. Controls model complexity. A depth of 5 balances the ability to capture complex wage patterns without overfitting to noise in the survey data.</p></li>
+<li><p><strong><code>subsample</code>&nbsp;(0.8)</strong>: Each tree is trained on a random 80% of the training rows. Introducing randomness that prevents trees from becoming too similar to each other and improves generalisation.</p></li>
+<li><p><strong><code>colsample_bytree</code>&nbsp;(0.7)</strong>: Each tree sees a random 70% of features. Particularly useful for our dataset where many of the 260+ binary features are correlated with each other.</p></li>
+<li><p><strong><code>min_child_weight</code>&nbsp;(5)</strong>: The minimum number of observations required in a leaf node. Prevents the model from learning patterns that only apply to very small groups of respondents, which are likely noise rather than real wage signals.</p></li>
+<li><p><strong><code>gamma</code>&nbsp;(0.1)</strong>: The minimum loss reduction required to make a split. Acts as a pruning mechanism, ensuring the model only makes splits that meaningfully improve predictions.</p></li>
 </ul>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb24"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Grid of parameter combinations to try</span></span>
-<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>param_grid <span class="ot">&lt;-</span> <span class="fu">list</span>(</span>
-<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">list</span>(<span class="at">eta=</span><span class="fl">0.05</span>, <span class="at">max_depth=</span><span class="dv">4</span>, <span class="at">min_child_weight=</span><span class="dv">3</span>,  <span class="at">gamma=</span><span class="fl">0.0</span>, <span class="at">subsample=</span><span class="fl">0.8</span>, <span class="at">colsample_bytree=</span><span class="fl">0.7</span>),</span>
-<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">list</span>(<span class="at">eta=</span><span class="fl">0.05</span>, <span class="at">max_depth=</span><span class="dv">5</span>, <span class="at">min_child_weight=</span><span class="dv">3</span>,  <span class="at">gamma=</span><span class="fl">0.0</span>, <span class="at">subsample=</span><span class="fl">0.8</span>, <span class="at">colsample_bytree=</span><span class="fl">0.7</span>),</span>
-<span id="cb24-5"><a href="#cb24-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">list</span>(<span class="at">eta=</span><span class="fl">0.05</span>, <span class="at">max_depth=</span><span class="dv">6</span>, <span class="at">min_child_weight=</span><span class="dv">3</span>,  <span class="at">gamma=</span><span class="fl">0.0</span>, <span class="at">subsample=</span><span class="fl">0.8</span>, <span class="at">colsample_bytree=</span><span class="fl">0.8</span>),</span>
-<span id="cb24-6"><a href="#cb24-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">list</span>(<span class="at">eta=</span><span class="fl">0.05</span>, <span class="at">max_depth=</span><span class="dv">5</span>, <span class="at">min_child_weight=</span><span class="dv">1</span>,  <span class="at">gamma=</span><span class="fl">0.0</span>, <span class="at">subsample=</span><span class="fl">0.9</span>, <span class="at">colsample_bytree=</span><span class="fl">0.8</span>),</span>
-<span id="cb24-7"><a href="#cb24-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">list</span>(<span class="at">eta=</span><span class="fl">0.05</span>, <span class="at">max_depth=</span><span class="dv">6</span>, <span class="at">min_child_weight=</span><span class="dv">1</span>,  <span class="at">gamma=</span><span class="fl">0.1</span>, <span class="at">subsample=</span><span class="fl">0.8</span>, <span class="at">colsample_bytree=</span><span class="fl">0.6</span>),</span>
-<span id="cb24-8"><a href="#cb24-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">list</span>(<span class="at">eta=</span><span class="fl">0.03</span>, <span class="at">max_depth=</span><span class="dv">5</span>, <span class="at">min_child_weight=</span><span class="dv">3</span>,  <span class="at">gamma=</span><span class="fl">0.0</span>, <span class="at">subsample=</span><span class="fl">0.8</span>, <span class="at">colsample_bytree=</span><span class="fl">0.7</span>),</span>
-<span id="cb24-9"><a href="#cb24-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">list</span>(<span class="at">eta=</span><span class="fl">0.03</span>, <span class="at">max_depth=</span><span class="dv">6</span>, <span class="at">min_child_weight=</span><span class="dv">1</span>,  <span class="at">gamma=</span><span class="fl">0.0</span>, <span class="at">subsample=</span><span class="fl">0.9</span>, <span class="at">colsample_bytree=</span><span class="fl">0.8</span>)</span>
-<span id="cb24-10"><a href="#cb24-10" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb24-11"><a href="#cb24-11" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-12"><a href="#cb24-12" aria-hidden="true" tabindex="-1"></a>best_cv_rmse <span class="ot">&lt;-</span> <span class="cn">Inf</span></span>
-<span id="cb24-13"><a href="#cb24-13" aria-hidden="true" tabindex="-1"></a>best_params  <span class="ot">&lt;-</span> <span class="cn">NULL</span></span>
-<span id="cb24-14"><a href="#cb24-14" aria-hidden="true" tabindex="-1"></a>best_rounds  <span class="ot">&lt;-</span> <span class="cn">NULL</span></span>
-<span id="cb24-15"><a href="#cb24-15" aria-hidden="true" tabindex="-1"></a></span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb24"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Best parameters found through trial and error</span></span>
+<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>best_params <span class="ot">&lt;-</span> <span class="fu">list</span>(</span>
+<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">objective        =</span> <span class="st">"reg:squarederror"</span>,</span>
+<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">eval_metric      =</span> <span class="st">"rmse"</span>,</span>
+<span id="cb24-5"><a href="#cb24-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">eta              =</span> <span class="fl">0.05</span>,</span>
+<span id="cb24-6"><a href="#cb24-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">max_depth        =</span> <span class="dv">5</span>,</span>
+<span id="cb24-7"><a href="#cb24-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">min_child_weight =</span> <span class="dv">3</span>,</span>
+<span id="cb24-8"><a href="#cb24-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">gamma            =</span> <span class="fl">0.0</span>,</span>
+<span id="cb24-9"><a href="#cb24-9" aria-hidden="true" tabindex="-1"></a>  <span class="at">subsample        =</span> <span class="fl">0.8</span>,</span>
+<span id="cb24-10"><a href="#cb24-10" aria-hidden="true" tabindex="-1"></a>  <span class="at">colsample_bytree =</span> <span class="fl">0.7</span>,</span>
+<span id="cb24-11"><a href="#cb24-11" aria-hidden="true" tabindex="-1"></a>  <span class="at">lambda           =</span> <span class="fl">1.0</span>,</span>
+<span id="cb24-12"><a href="#cb24-12" aria-hidden="true" tabindex="-1"></a>  <span class="at">alpha            =</span> <span class="fl">0.0</span></span>
+<span id="cb24-13"><a href="#cb24-13" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb24-14"><a href="#cb24-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-15"><a href="#cb24-15" aria-hidden="true" tabindex="-1"></a><span class="co"># Use cross-validation to find optimal number of rounds</span></span>
 <span id="cb24-16"><a href="#cb24-16" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">42</span>)</span>
-<span id="cb24-17"><a href="#cb24-17" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> (i <span class="cf">in</span> <span class="fu">seq_along</span>(param_grid)) {</span>
-<span id="cb24-18"><a href="#cb24-18" aria-hidden="true" tabindex="-1"></a>  p <span class="ot">&lt;-</span> param_grid[[i]]</span>
-<span id="cb24-19"><a href="#cb24-19" aria-hidden="true" tabindex="-1"></a>  p<span class="sc">$</span>objective   <span class="ot">&lt;-</span> <span class="st">"reg:squarederror"</span></span>
-<span id="cb24-20"><a href="#cb24-20" aria-hidden="true" tabindex="-1"></a>  p<span class="sc">$</span>eval_metric <span class="ot">&lt;-</span> <span class="st">"rmse"</span></span>
-<span id="cb24-21"><a href="#cb24-21" aria-hidden="true" tabindex="-1"></a>  p<span class="sc">$</span>lambda      <span class="ot">&lt;-</span> <span class="fl">1.0</span></span>
-<span id="cb24-22"><a href="#cb24-22" aria-hidden="true" tabindex="-1"></a>  p<span class="sc">$</span>alpha       <span class="ot">&lt;-</span> <span class="fl">0.0</span></span>
-<span id="cb24-23"><a href="#cb24-23" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-24"><a href="#cb24-24" aria-hidden="true" tabindex="-1"></a>  cv <span class="ot">&lt;-</span> <span class="fu">xgb.cv</span>(</span>
-<span id="cb24-25"><a href="#cb24-25" aria-hidden="true" tabindex="-1"></a>    <span class="at">data    =</span> dtrain,</span>
-<span id="cb24-26"><a href="#cb24-26" aria-hidden="true" tabindex="-1"></a>    <span class="at">nrounds =</span> <span class="dv">600</span>,</span>
-<span id="cb24-27"><a href="#cb24-27" aria-hidden="true" tabindex="-1"></a>    <span class="at">nfold   =</span> <span class="dv">5</span>,</span>
-<span id="cb24-28"><a href="#cb24-28" aria-hidden="true" tabindex="-1"></a>    <span class="at">params  =</span> p,</span>
-<span id="cb24-29"><a href="#cb24-29" aria-hidden="true" tabindex="-1"></a>    <span class="at">verbose =</span> <span class="cn">FALSE</span></span>
-<span id="cb24-30"><a href="#cb24-30" aria-hidden="true" tabindex="-1"></a>  )</span>
-<span id="cb24-31"><a href="#cb24-31" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-32"><a href="#cb24-32" aria-hidden="true" tabindex="-1"></a>  min_rmse   <span class="ot">&lt;-</span> <span class="fu">min</span>(cv<span class="sc">$</span>evaluation_log<span class="sc">$</span>test_rmse_mean)</span>
-<span id="cb24-33"><a href="#cb24-33" aria-hidden="true" tabindex="-1"></a>  best_round <span class="ot">&lt;-</span> <span class="fu">which.min</span>(cv<span class="sc">$</span>evaluation_log<span class="sc">$</span>test_rmse_mean)</span>
-<span id="cb24-34"><a href="#cb24-34" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-35"><a href="#cb24-35" aria-hidden="true" tabindex="-1"></a>  <span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"Config %d | depth=%d eta=%.2f mcw=%d | CV RMSE: %.4f (round %d)</span><span class="sc">\n</span><span class="st">"</span>,</span>
-<span id="cb24-36"><a href="#cb24-36" aria-hidden="true" tabindex="-1"></a>              i, p<span class="sc">$</span>max_depth, p<span class="sc">$</span>eta, p<span class="sc">$</span>min_child_weight, min_rmse, best_round))</span>
-<span id="cb24-37"><a href="#cb24-37" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-38"><a href="#cb24-38" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span> (min_rmse <span class="sc">&lt;</span> best_cv_rmse) {</span>
-<span id="cb24-39"><a href="#cb24-39" aria-hidden="true" tabindex="-1"></a>    best_cv_rmse <span class="ot">&lt;-</span> min_rmse</span>
-<span id="cb24-40"><a href="#cb24-40" aria-hidden="true" tabindex="-1"></a>    best_params  <span class="ot">&lt;-</span> p</span>
-<span id="cb24-41"><a href="#cb24-41" aria-hidden="true" tabindex="-1"></a>    best_rounds  <span class="ot">&lt;-</span> best_round</span>
-<span id="cb24-42"><a href="#cb24-42" aria-hidden="true" tabindex="-1"></a>  }</span>
-<span id="cb24-43"><a href="#cb24-43" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb24-17"><a href="#cb24-17" aria-hidden="true" tabindex="-1"></a>xgb_cv <span class="ot">&lt;-</span> <span class="fu">xgb.cv</span>(</span>
+<span id="cb24-18"><a href="#cb24-18" aria-hidden="true" tabindex="-1"></a>  <span class="at">data    =</span> dtrain,</span>
+<span id="cb24-19"><a href="#cb24-19" aria-hidden="true" tabindex="-1"></a>  <span class="at">nrounds =</span> <span class="dv">600</span>,</span>
+<span id="cb24-20"><a href="#cb24-20" aria-hidden="true" tabindex="-1"></a>  <span class="at">nfold   =</span> <span class="dv">5</span>,</span>
+<span id="cb24-21"><a href="#cb24-21" aria-hidden="true" tabindex="-1"></a>  <span class="at">params  =</span> best_params,</span>
+<span id="cb24-22"><a href="#cb24-22" aria-hidden="true" tabindex="-1"></a>  <span class="at">verbose =</span> <span class="cn">FALSE</span></span>
+<span id="cb24-23"><a href="#cb24-23" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb24-24"><a href="#cb24-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-25"><a href="#cb24-25" aria-hidden="true" tabindex="-1"></a>best_nrounds <span class="ot">&lt;-</span> <span class="fu">which.min</span>(xgb_cv<span class="sc">$</span>evaluation_log<span class="sc">$</span>test_rmse_mean)</span>
+<span id="cb24-26"><a href="#cb24-26" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"Best number of rounds: %d</span><span class="sc">\n</span><span class="st">"</span>, best_nrounds))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>Config 1 | depth=4 eta=0.05 mcw=3 | CV RMSE: 2.6073 (round 335)
-Config 2 | depth=5 eta=0.05 mcw=3 | CV RMSE: 2.6261 (round 215)
-Config 3 | depth=6 eta=0.05 mcw=3 | CV RMSE: 2.6243 (round 153)
-Config 4 | depth=5 eta=0.05 mcw=1 | CV RMSE: 2.6176 (round 199)
-Config 5 | depth=6 eta=0.05 mcw=1 | CV RMSE: 2.6210 (round 153)
-Config 6 | depth=5 eta=0.03 mcw=3 | CV RMSE: 2.6144 (round 347)
-Config 7 | depth=6 eta=0.03 mcw=1 | CV RMSE: 2.6255 (round 315)</code></pre>
+<pre><code>Best number of rounds: 183</code></pre>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb26"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"</span><span class="sc">\n</span><span class="st">Best CV RMSE: %.4f at round %d</span><span class="sc">\n</span><span class="st">"</span>, best_cv_rmse, best_rounds))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb26"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Train final model</span></span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">42</span>)</span>
+<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a>xgb_model <span class="ot">&lt;-</span> <span class="fu">xgb.train</span>(</span>
+<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">data    =</span> dtrain,</span>
+<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">nrounds =</span> best_nrounds,</span>
+<span id="cb26-6"><a href="#cb26-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">params  =</span> best_params,</span>
+<span id="cb26-7"><a href="#cb26-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">verbose =</span> <span class="dv">0</span></span>
+<span id="cb26-8"><a href="#cb26-8" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb26-9"><a href="#cb26-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-10"><a href="#cb26-10" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Model training complete.</span><span class="sc">\n</span><span class="st">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>
-Best CV RMSE: 2.6073 at round 335</code></pre>
+<pre><code>Model training complete.</code></pre>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb28"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Train final model with best params</span></span>
-<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">42</span>)</span>
-<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a>xgb_model <span class="ot">&lt;-</span> <span class="fu">xgb.train</span>(</span>
-<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">data    =</span> dtrain,</span>
-<span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">nrounds =</span> best_rounds,</span>
-<span id="cb28-6"><a href="#cb28-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">params  =</span> best_params,</span>
-<span id="cb28-7"><a href="#cb28-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">verbose =</span> <span class="dv">0</span></span>
-<span id="cb28-8"><a href="#cb28-8" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 </section>
 <section id="model-evaluation" class="level3">
-<h3 class="anchored" data-anchor-id="model-evaluation">4.4 Model Evaluation</h3>
+<h3 class="anchored" data-anchor-id="model-evaluation">4.2 Model Evaluation</h3>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb29"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Predictions</span></span>
-<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a>xgb_preds_log  <span class="ot">&lt;-</span> <span class="fu">predict</span>(xgb_model, dtest)</span>
-<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a>xgb_preds_orig <span class="ot">&lt;-</span> <span class="fu">expm1</span>(xgb_preds_log)</span>
-<span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a>actual_orig    <span class="ot">&lt;-</span> <span class="fu">expm1</span>(y_test)</span>
-<span id="cb29-5"><a href="#cb29-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb29-6"><a href="#cb29-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Metrics</span></span>
-<span id="cb29-7"><a href="#cb29-7" aria-hidden="true" tabindex="-1"></a>xgb_rmse_log  <span class="ot">&lt;-</span> <span class="fu">rmse</span>(y_test,     xgb_preds_log)</span>
-<span id="cb29-8"><a href="#cb29-8" aria-hidden="true" tabindex="-1"></a>xgb_rmse_orig <span class="ot">&lt;-</span> <span class="fu">rmse</span>(actual_orig, xgb_preds_orig)</span>
-<span id="cb29-9"><a href="#cb29-9" aria-hidden="true" tabindex="-1"></a>xgb_mae_orig  <span class="ot">&lt;-</span> <span class="fu">mae</span>(actual_orig,  xgb_preds_orig)</span>
-<span id="cb29-10"><a href="#cb29-10" aria-hidden="true" tabindex="-1"></a>xgb_r2        <span class="ot">&lt;-</span> <span class="fu">cor</span>(y_test,      xgb_preds_log)<span class="sc">^</span><span class="dv">2</span></span>
-<span id="cb29-11"><a href="#cb29-11" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb29-12"><a href="#cb29-12" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"=== XGBoost Test Set Performance ===</span><span class="sc">\n</span><span class="st">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb28"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Predictions</span></span>
+<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a>xgb_preds_log  <span class="ot">&lt;-</span> <span class="fu">predict</span>(xgb_model, dtest)</span>
+<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a>xgb_preds_orig <span class="ot">&lt;-</span> <span class="fu">expm1</span>(xgb_preds_log)</span>
+<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a>actual_orig    <span class="ot">&lt;-</span> <span class="fu">expm1</span>(y_test)</span>
+<span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb28-6"><a href="#cb28-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Metrics</span></span>
+<span id="cb28-7"><a href="#cb28-7" aria-hidden="true" tabindex="-1"></a>xgb_r2        <span class="ot">&lt;-</span> <span class="fu">cor</span>(y_test, xgb_preds_log)<span class="sc">^</span><span class="dv">2</span></span>
+<span id="cb28-8"><a href="#cb28-8" aria-hidden="true" tabindex="-1"></a>xgb_rmse_orig <span class="ot">&lt;-</span> <span class="fu">rmse</span>(actual_orig, xgb_preds_orig)</span>
+<span id="cb28-9"><a href="#cb28-9" aria-hidden="true" tabindex="-1"></a>xgb_mae_orig  <span class="ot">&lt;-</span> <span class="fu">mae</span>(actual_orig,  xgb_preds_orig)</span>
+<span id="cb28-10"><a href="#cb28-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb28-11"><a href="#cb28-11" aria-hidden="true" tabindex="-1"></a><span class="co"># Results table</span></span>
+<span id="cb28-12"><a href="#cb28-12" aria-hidden="true" tabindex="-1"></a><span class="fu">data.frame</span>(</span>
+<span id="cb28-13"><a href="#cb28-13" aria-hidden="true" tabindex="-1"></a>  <span class="at">Metric =</span> <span class="fu">c</span>(<span class="st">"R²"</span>, <span class="st">"RMSE (USD)"</span>, <span class="st">"MAE (USD)"</span>),</span>
+<span id="cb28-14"><a href="#cb28-14" aria-hidden="true" tabindex="-1"></a>  <span class="at">Value  =</span> <span class="fu">c</span>(<span class="fu">round</span>(xgb_r2, <span class="dv">3</span>),</span>
+<span id="cb28-15"><a href="#cb28-15" aria-hidden="true" tabindex="-1"></a>             <span class="fu">round</span>(xgb_rmse_orig, <span class="dv">0</span>),</span>
+<span id="cb28-16"><a href="#cb28-16" aria-hidden="true" tabindex="-1"></a>             <span class="fu">round</span>(xgb_mae_orig,  <span class="dv">0</span>))</span>
+<span id="cb28-17"><a href="#cb28-17" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>=== XGBoost Test Set Performance ===</code></pre>
-</div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb31"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"R²:              %.4f</span><span class="sc">\n</span><span class="st">"</span>, xgb_r2))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="cell-output cell-output-stdout">
-<pre><code>R²:              0.3269</code></pre>
-</div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb33"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"RMSE (log):      %.4f</span><span class="sc">\n</span><span class="st">"</span>, xgb_rmse_log))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="cell-output cell-output-stdout">
-<pre><code>RMSE (log):      2.6731</code></pre>
-</div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb35"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"RMSE (USD):      %.1f</span><span class="sc">\n</span><span class="st">"</span>, xgb_rmse_orig))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="cell-output cell-output-stdout">
-<pre><code>RMSE (USD):      49543.8</code></pre>
-</div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb37"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"MAE  (USD):      %.1f</span><span class="sc">\n</span><span class="st">"</span>, xgb_mae_orig))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="cell-output cell-output-stdout">
-<pre><code>MAE  (USD):      25153.9</code></pre>
+<pre><code>      Metric     Value
+1         R²     0.327
+2 RMSE (USD) 49800.000
+3  MAE (USD) 24903.000</code></pre>
 </div>
 </div>
 <p>Initially, the XGBoost model produced a lower than expected R² of approximately 0.33. During our investigation we discovered that excluding wages equal to zero nearly doubled the model’s accuracy, bringing R² to approximately 0.65. After careful consideration however, we decided to retain the zero-wage observations in our final model. While their removal improves performance metrics, excluding them introduces a selection bias, students, unemployed respondents, and those who chose not to disclose their income are a real and meaningful part of the population. Removing them would make the model less representative of the full workforce and could lead to misleading predictions for profiles that resemble these groups.</p>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb39"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a>residuals_df <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
-<span id="cb39-2"><a href="#cb39-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">actual    =</span> actual_orig,</span>
-<span id="cb39-3"><a href="#cb39-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">predicted =</span> xgb_preds_orig,</span>
-<span id="cb39-4"><a href="#cb39-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">residual  =</span> actual_orig <span class="sc">-</span> xgb_preds_orig</span>
-<span id="cb39-5"><a href="#cb39-5" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb39-6"><a href="#cb39-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb39-7"><a href="#cb39-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Actual vs Predicted</span></span>
-<span id="cb39-8"><a href="#cb39-8" aria-hidden="true" tabindex="-1"></a>p1 <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(residuals_df, <span class="fu">aes</span>(<span class="at">x =</span> actual, <span class="at">y =</span> predicted)) <span class="sc">+</span></span>
-<span id="cb39-9"><a href="#cb39-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="at">alpha =</span> <span class="fl">0.3</span>, <span class="at">color =</span> <span class="st">"steelblue"</span>, <span class="at">size =</span> <span class="dv">1</span>) <span class="sc">+</span></span>
-<span id="cb39-10"><a href="#cb39-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_abline</span>(<span class="at">intercept =</span> <span class="dv">0</span>, <span class="at">slope =</span> <span class="dv">1</span>, <span class="at">color =</span> <span class="st">"red"</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>) <span class="sc">+</span></span>
-<span id="cb39-11"><a href="#cb39-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Actual vs Predicted Wage"</span>,</span>
-<span id="cb39-12"><a href="#cb39-12" aria-hidden="true" tabindex="-1"></a>       <span class="at">x =</span> <span class="st">"Actual Wage (USD)"</span>, <span class="at">y =</span> <span class="st">"Predicted Wage (USD)"</span>) <span class="sc">+</span></span>
-<span id="cb39-13"><a href="#cb39-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span>
-<span id="cb39-14"><a href="#cb39-14" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb39-15"><a href="#cb39-15" aria-hidden="true" tabindex="-1"></a><span class="co"># Residuals vs Predicted</span></span>
-<span id="cb39-16"><a href="#cb39-16" aria-hidden="true" tabindex="-1"></a>p2 <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(residuals_df, <span class="fu">aes</span>(<span class="at">x =</span> predicted, <span class="at">y =</span> residual)) <span class="sc">+</span></span>
-<span id="cb39-17"><a href="#cb39-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="at">alpha =</span> <span class="fl">0.3</span>, <span class="at">color =</span> <span class="st">"darkorange"</span>, <span class="at">size =</span> <span class="dv">1</span>) <span class="sc">+</span></span>
-<span id="cb39-18"><a href="#cb39-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_hline</span>(<span class="at">yintercept =</span> <span class="dv">0</span>, <span class="at">color =</span> <span class="st">"red"</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>) <span class="sc">+</span></span>
-<span id="cb39-19"><a href="#cb39-19" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Residuals vs Predicted"</span>,</span>
-<span id="cb39-20"><a href="#cb39-20" aria-hidden="true" tabindex="-1"></a>       <span class="at">x =</span> <span class="st">"Predicted Wage (USD)"</span>, <span class="at">y =</span> <span class="st">"Residual"</span>) <span class="sc">+</span></span>
-<span id="cb39-21"><a href="#cb39-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span>
-<span id="cb39-22"><a href="#cb39-22" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb39-23"><a href="#cb39-23" aria-hidden="true" tabindex="-1"></a><span class="co"># Residual distribution</span></span>
-<span id="cb39-24"><a href="#cb39-24" aria-hidden="true" tabindex="-1"></a>p3 <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(residuals_df, <span class="fu">aes</span>(<span class="at">x =</span> residual)) <span class="sc">+</span></span>
-<span id="cb39-25"><a href="#cb39-25" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_histogram</span>(<span class="at">fill =</span> <span class="st">"steelblue"</span>, <span class="at">bins =</span> <span class="dv">40</span>, <span class="at">alpha =</span> <span class="fl">0.8</span>) <span class="sc">+</span></span>
-<span id="cb39-26"><a href="#cb39-26" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_vline</span>(<span class="at">xintercept =</span> <span class="dv">0</span>, <span class="at">color =</span> <span class="st">"red"</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>) <span class="sc">+</span></span>
-<span id="cb39-27"><a href="#cb39-27" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Distribution of Residuals"</span>,</span>
-<span id="cb39-28"><a href="#cb39-28" aria-hidden="true" tabindex="-1"></a>       <span class="at">x =</span> <span class="st">"Residual"</span>, <span class="at">y =</span> <span class="st">"Count"</span>) <span class="sc">+</span></span>
-<span id="cb39-29"><a href="#cb39-29" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span>
-<span id="cb39-30"><a href="#cb39-30" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb39-31"><a href="#cb39-31" aria-hidden="true" tabindex="-1"></a>gridExtra<span class="sc">::</span><span class="fu">grid.arrange</span>(p1, p2, p3, <span class="at">ncol =</span> <span class="dv">3</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb30"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a>residuals_df <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">actual    =</span> actual_orig,</span>
+<span id="cb30-3"><a href="#cb30-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">predicted =</span> xgb_preds_orig,</span>
+<span id="cb30-4"><a href="#cb30-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">residual  =</span> actual_orig <span class="sc">-</span> xgb_preds_orig</span>
+<span id="cb30-5"><a href="#cb30-5" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb30-6"><a href="#cb30-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb30-7"><a href="#cb30-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Actual vs Predicted</span></span>
+<span id="cb30-8"><a href="#cb30-8" aria-hidden="true" tabindex="-1"></a>p1 <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(residuals_df, <span class="fu">aes</span>(<span class="at">x =</span> actual, <span class="at">y =</span> predicted)) <span class="sc">+</span></span>
+<span id="cb30-9"><a href="#cb30-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="at">alpha =</span> <span class="fl">0.3</span>, <span class="at">color =</span> <span class="st">"steelblue"</span>, <span class="at">size =</span> <span class="dv">1</span>) <span class="sc">+</span></span>
+<span id="cb30-10"><a href="#cb30-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_abline</span>(<span class="at">slope =</span> <span class="dv">1</span>, <span class="at">intercept =</span> <span class="dv">0</span>, <span class="at">color =</span> <span class="st">"red"</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>) <span class="sc">+</span></span>
+<span id="cb30-11"><a href="#cb30-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Actual vs Predicted"</span>, <span class="at">x =</span> <span class="st">"Actual (USD)"</span>, <span class="at">y =</span> <span class="st">"Predicted (USD)"</span>) <span class="sc">+</span></span>
+<span id="cb30-12"><a href="#cb30-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span>
+<span id="cb30-13"><a href="#cb30-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb30-14"><a href="#cb30-14" aria-hidden="true" tabindex="-1"></a><span class="co"># Residual distribution</span></span>
+<span id="cb30-15"><a href="#cb30-15" aria-hidden="true" tabindex="-1"></a>p2 <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(residuals_df, <span class="fu">aes</span>(<span class="at">x =</span> residual)) <span class="sc">+</span></span>
+<span id="cb30-16"><a href="#cb30-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_histogram</span>(<span class="at">fill =</span> <span class="st">"steelblue"</span>, <span class="at">bins =</span> <span class="dv">40</span>, <span class="at">alpha =</span> <span class="fl">0.8</span>) <span class="sc">+</span></span>
+<span id="cb30-17"><a href="#cb30-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_vline</span>(<span class="at">xintercept =</span> <span class="dv">0</span>, <span class="at">color =</span> <span class="st">"red"</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>) <span class="sc">+</span></span>
+<span id="cb30-18"><a href="#cb30-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Residual Distribution"</span>, <span class="at">x =</span> <span class="st">"Residual (USD)"</span>, <span class="at">y =</span> <span class="st">"Count"</span>) <span class="sc">+</span></span>
+<span id="cb30-19"><a href="#cb30-19" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span>
+<span id="cb30-20"><a href="#cb30-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb30-21"><a href="#cb30-21" aria-hidden="true" tabindex="-1"></a>gridExtra<span class="sc">::</span><span class="fu">grid.arrange</span>(p1, p2, <span class="at">ncol =</span> <span class="dv">2</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output-display">
 <div>
 <figure class="figure">
@@ -589,15 +551,7 @@ Best CV RMSE: 2.6073 at round 335</code></pre>
 </div>
 </div>
 <p>To evaluate model performance visually we produce three diagnostic plots. The first plot shows Actual vs Predicted Wage, in a perfect model all points would fall exactly on the red dashed line. Points scattered around it indicate prediction errors, with points above the line meaning the model underestimated and points below meaning it overestimated. The second plot shows Residuals vs Predicted, residuals are the difference between actual and predicted wages. Ideally these should be randomly scattered around zero with no clear pattern. A pattern would suggest the model is systematically wrong for certain wage ranges. The third plot shows the Distribution of Residuals, ideally this should be a bell curve centered at zero, meaning errors are symmetric and the model is not consistently over or under predicting. In our case the residuals are approximately centered at zero, which is a good sign, though the spread reflects the inherent difficulty of predicting wages from survey data.</p>
-<p><strong>Performance discussion:</strong></p>
-<p>The model achieves an R² of approximately 0.31–0.40 on this dataset. While this may seem modest, it is expected and acceptable given:</p>
-<ul>
-<li><strong>Bucketed variables</strong>: Age and experience are ranges (e.g.&nbsp;25–29, 1–2 years), not exact values — this loses precision</li>
-<li><strong>Self-reported global survey</strong>: Wages vary enormously across countries and roles; a single model must capture all this diversity</li>
-<li><strong>Inherent noise</strong>: Survey respondents may approximate or misreport salaries</li>
-<li><strong>No continuous numeric predictors</strong>: Almost all features are categorical, limiting the model’s ability to capture fine-grained patterns</li>
-</ul>
-<p>An R² of 0.31+ on a noisy global wage survey is consistent with published research on similar datasets.</p>
+<p>The model achieves an R² of approximately 0.33, which while modest is expected and acceptable for this dataset. Age and experience are bucketed ranges rather than exact values, wages are self-reported across vastly different countries and roles, and almost all features are categorical, leaving the model with limited ability to capture fine-grained patterns. Survey respondents may also approximate or misreport their salaries, adding further noise. An R² of 0.33 on a noisy global wage survey is consistent with published research on similar datasets.</p>
 <hr>
 </section>
 </section>
@@ -605,15 +559,14 @@ Best CV RMSE: 2.6073 at round 335</code></pre>
 <h2 class="anchored" data-anchor-id="model-explainability">5. Model Explainability</h2>
 <section id="feature-importance" class="level3">
 <h3 class="anchored" data-anchor-id="feature-importance">5.1 Feature Importance</h3>
-<p>XGBoost’s built-in importance measures show which features contributed most to splits across all trees. We show the top 20 features by <strong>Gain</strong> — the average improvement in loss brought by a feature.</p>
+<p>XGBoost’s built-in importance measures show which features contributed most to splits across all trees. We show the top 20 features by <strong>Gain</strong></p>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb40"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb40-1"><a href="#cb40-1" aria-hidden="true" tabindex="-1"></a>importance_matrix <span class="ot">&lt;-</span> <span class="fu">xgb.importance</span>(<span class="at">model =</span> xgb_model)</span>
-<span id="cb40-2"><a href="#cb40-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb40-3"><a href="#cb40-3" aria-hidden="true" tabindex="-1"></a><span class="fu">xgb.plot.importance</span>(</span>
-<span id="cb40-4"><a href="#cb40-4" aria-hidden="true" tabindex="-1"></a>  importance_matrix[<span class="dv">1</span><span class="sc">:</span><span class="dv">20</span>, ],</span>
-<span id="cb40-5"><a href="#cb40-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">main =</span> <span class="st">"Top 20 Features by Gain — XGBoost"</span>,</span>
-<span id="cb40-6"><a href="#cb40-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">col  =</span> <span class="st">"steelblue"</span></span>
-<span id="cb40-7"><a href="#cb40-7" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb31"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a>importance_matrix <span class="ot">&lt;-</span> <span class="fu">xgb.importance</span>(<span class="at">model =</span> xgb_model)</span>
+<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a><span class="fu">xgb.plot.importance</span>(</span>
+<span id="cb31-4"><a href="#cb31-4" aria-hidden="true" tabindex="-1"></a>  importance_matrix[<span class="dv">1</span><span class="sc">:</span><span class="dv">20</span>, ],</span>
+<span id="cb31-5"><a href="#cb31-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">main =</span> <span class="st">"Top 20 Features by Gain"</span></span>
+<span id="cb31-6"><a href="#cb31-6" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output-display">
 <div>
 <figure class="figure">
@@ -627,18 +580,18 @@ Best CV RMSE: 2.6073 at round 335</code></pre>
 <section id="dalex-explainer-setup" class="level3">
 <h3 class="anchored" data-anchor-id="dalex-explainer-setup">5.2 DALEX Explainer Setup</h3>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb41"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb41-1"><a href="#cb41-1" aria-hidden="true" tabindex="-1"></a>xgb_predict_fun <span class="ot">&lt;-</span> <span class="cf">function</span>(model, newdata) {</span>
-<span id="cb41-2"><a href="#cb41-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">predict</span>(model, <span class="fu">xgb.DMatrix</span>(<span class="fu">as.matrix</span>(newdata)))</span>
-<span id="cb41-3"><a href="#cb41-3" aria-hidden="true" tabindex="-1"></a>}</span>
-<span id="cb41-4"><a href="#cb41-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-5"><a href="#cb41-5" aria-hidden="true" tabindex="-1"></a>explainer <span class="ot">&lt;-</span> DALEX<span class="sc">::</span><span class="fu">explain</span>(</span>
-<span id="cb41-6"><a href="#cb41-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">model            =</span> xgb_model,</span>
-<span id="cb41-7"><a href="#cb41-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">data             =</span> <span class="fu">as.data.frame</span>(X_test),</span>
-<span id="cb41-8"><a href="#cb41-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">y                =</span> y_test,</span>
-<span id="cb41-9"><a href="#cb41-9" aria-hidden="true" tabindex="-1"></a>  <span class="at">predict_function =</span> xgb_predict_fun,</span>
-<span id="cb41-10"><a href="#cb41-10" aria-hidden="true" tabindex="-1"></a>  <span class="at">label            =</span> <span class="st">"XGBoost"</span>,</span>
-<span id="cb41-11"><a href="#cb41-11" aria-hidden="true" tabindex="-1"></a>  <span class="at">verbose          =</span> <span class="cn">FALSE</span></span>
-<span id="cb41-12"><a href="#cb41-12" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb32"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a>xgb_predict_fun <span class="ot">&lt;-</span> <span class="cf">function</span>(model, newdata) {</span>
+<span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">predict</span>(model, <span class="fu">xgb.DMatrix</span>(<span class="fu">as.matrix</span>(newdata)))</span>
+<span id="cb32-3"><a href="#cb32-3" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb32-4"><a href="#cb32-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb32-5"><a href="#cb32-5" aria-hidden="true" tabindex="-1"></a>explainer <span class="ot">&lt;-</span> DALEX<span class="sc">::</span><span class="fu">explain</span>(</span>
+<span id="cb32-6"><a href="#cb32-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">model            =</span> xgb_model,</span>
+<span id="cb32-7"><a href="#cb32-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">data             =</span> <span class="fu">as.data.frame</span>(X_test),</span>
+<span id="cb32-8"><a href="#cb32-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">y                =</span> y_test,</span>
+<span id="cb32-9"><a href="#cb32-9" aria-hidden="true" tabindex="-1"></a>  <span class="at">predict_function =</span> xgb_predict_fun,</span>
+<span id="cb32-10"><a href="#cb32-10" aria-hidden="true" tabindex="-1"></a>  <span class="at">label            =</span> <span class="st">"XGBoost"</span>,</span>
+<span id="cb32-11"><a href="#cb32-11" aria-hidden="true" tabindex="-1"></a>  <span class="at">verbose          =</span> <span class="cn">FALSE</span></span>
+<span id="cb32-12"><a href="#cb32-12" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <p>To interpret our XGBoost model we use DALEX (Descriptive mAchine Learning EXplanations), a model-agnostic explainability framework. DALEX works by wrapping around any trained model. Regardless of its internal complexity and providing a unified set of tools to understand its behaviour. This is particularly valuable for XGBoost, which is inherently a black box model. Without explainability tools we would know what the model predicts but not why. DALEX solves this by providing three complementary techniques:</p>
 <ul>
@@ -652,17 +605,17 @@ Best CV RMSE: 2.6073 at round 335</code></pre>
 <h3 class="anchored" data-anchor-id="partial-dependence-profiles">5.3 Partial Dependence Profiles</h3>
 <p>PDPs show how the predicted wage changes as a single feature varies, with all other features held constant. This reveals the direction and shape of each feature’s effect.</p>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb42"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb42-1"><a href="#cb42-1" aria-hidden="true" tabindex="-1"></a>top_features <span class="ot">&lt;-</span> importance_matrix<span class="sc">$</span>Feature[<span class="dv">1</span><span class="sc">:</span><span class="dv">5</span>]</span>
-<span id="cb42-2"><a href="#cb42-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb42-3"><a href="#cb42-3" aria-hidden="true" tabindex="-1"></a>pdp_profiles <span class="ot">&lt;-</span> <span class="fu">model_profile</span>(</span>
-<span id="cb42-4"><a href="#cb42-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">explainer =</span> explainer,</span>
-<span id="cb42-5"><a href="#cb42-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">variables =</span> top_features,</span>
-<span id="cb42-6"><a href="#cb42-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">type      =</span> <span class="st">"partial"</span></span>
-<span id="cb42-7"><a href="#cb42-7" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb42-8"><a href="#cb42-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb42-9"><a href="#cb42-9" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(pdp_profiles) <span class="sc">+</span></span>
-<span id="cb42-10"><a href="#cb42-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Partial Dependence Profiles — Top 5 Features"</span>) <span class="sc">+</span></span>
-<span id="cb42-11"><a href="#cb42-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb33"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a>top_features <span class="ot">&lt;-</span> importance_matrix<span class="sc">$</span>Feature[<span class="dv">1</span><span class="sc">:</span><span class="dv">5</span>]</span>
+<span id="cb33-2"><a href="#cb33-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb33-3"><a href="#cb33-3" aria-hidden="true" tabindex="-1"></a>pdp_profiles <span class="ot">&lt;-</span> <span class="fu">model_profile</span>(</span>
+<span id="cb33-4"><a href="#cb33-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">explainer =</span> explainer,</span>
+<span id="cb33-5"><a href="#cb33-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">variables =</span> top_features,</span>
+<span id="cb33-6"><a href="#cb33-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">type      =</span> <span class="st">"partial"</span></span>
+<span id="cb33-7"><a href="#cb33-7" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb33-8"><a href="#cb33-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb33-9"><a href="#cb33-9" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(pdp_profiles) <span class="sc">+</span></span>
+<span id="cb33-10"><a href="#cb33-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Partial Dependence Profiles — Top 5 Features"</span>) <span class="sc">+</span></span>
+<span id="cb33-11"><a href="#cb33-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output-display">
 <div>
 <figure class="figure">
@@ -676,17 +629,17 @@ Best CV RMSE: 2.6073 at round 335</code></pre>
 <h3 class="anchored" data-anchor-id="shap-break-down-for-one-prediction">5.4 SHAP Break-Down for One Prediction</h3>
 <p>The break-down plot decomposes a single prediction into feature contributions — showing exactly how each variable pushed the predicted wage up or down from the baseline.</p>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb43"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb43-1"><a href="#cb43-1" aria-hidden="true" tabindex="-1"></a>obs_to_explain <span class="ot">&lt;-</span> <span class="fu">as.data.frame</span>(X_test)[<span class="dv">1</span>, , drop <span class="ot">=</span> <span class="cn">FALSE</span>]</span>
-<span id="cb43-2"><a href="#cb43-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb43-3"><a href="#cb43-3" aria-hidden="true" tabindex="-1"></a>bd <span class="ot">&lt;-</span> <span class="fu">predict_parts</span>(</span>
-<span id="cb43-4"><a href="#cb43-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">explainer       =</span> explainer,</span>
-<span id="cb43-5"><a href="#cb43-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">new_observation =</span> obs_to_explain,</span>
-<span id="cb43-6"><a href="#cb43-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">type            =</span> <span class="st">"break_down"</span></span>
-<span id="cb43-7"><a href="#cb43-7" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb43-8"><a href="#cb43-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb43-9"><a href="#cb43-9" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(bd) <span class="sc">+</span></span>
-<span id="cb43-10"><a href="#cb43-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Break-Down Explanation — Single Prediction"</span>) <span class="sc">+</span></span>
-<span id="cb43-11"><a href="#cb43-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb34"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a>obs_to_explain <span class="ot">&lt;-</span> <span class="fu">as.data.frame</span>(X_test)[<span class="dv">1</span>, , drop <span class="ot">=</span> <span class="cn">FALSE</span>]</span>
+<span id="cb34-2"><a href="#cb34-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb34-3"><a href="#cb34-3" aria-hidden="true" tabindex="-1"></a>bd <span class="ot">&lt;-</span> <span class="fu">predict_parts</span>(</span>
+<span id="cb34-4"><a href="#cb34-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">explainer       =</span> explainer,</span>
+<span id="cb34-5"><a href="#cb34-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">new_observation =</span> obs_to_explain,</span>
+<span id="cb34-6"><a href="#cb34-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">type            =</span> <span class="st">"break_down"</span></span>
+<span id="cb34-7"><a href="#cb34-7" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb34-8"><a href="#cb34-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb34-9"><a href="#cb34-9" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(bd) <span class="sc">+</span></span>
+<span id="cb34-10"><a href="#cb34-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Break-Down Explanation Single Prediction"</span>) <span class="sc">+</span></span>
+<span id="cb34-11"><a href="#cb34-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output-display">
 <div>
 <figure class="figure">
@@ -700,16 +653,16 @@ Best CV RMSE: 2.6073 at round 335</code></pre>
 <h3 class="anchored" data-anchor-id="shap-values">5.5 SHAP Values</h3>
 <p>SHAP (SHapley Additive exPlanations) values provide a theoretically grounded attribution of each feature’s contribution. Unlike break-down plots, SHAP accounts for feature interactions by averaging over all possible feature orderings.</p>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb44"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb44-1"><a href="#cb44-1" aria-hidden="true" tabindex="-1"></a>shap_vals <span class="ot">&lt;-</span> <span class="fu">predict_parts</span>(</span>
-<span id="cb44-2"><a href="#cb44-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">explainer       =</span> explainer,</span>
-<span id="cb44-3"><a href="#cb44-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">new_observation =</span> obs_to_explain,</span>
-<span id="cb44-4"><a href="#cb44-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">type            =</span> <span class="st">"shap"</span>,</span>
-<span id="cb44-5"><a href="#cb44-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">B               =</span> <span class="dv">15</span></span>
-<span id="cb44-6"><a href="#cb44-6" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb44-7"><a href="#cb44-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb44-8"><a href="#cb44-8" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(shap_vals) <span class="sc">+</span></span>
-<span id="cb44-9"><a href="#cb44-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"SHAP Values — Single Prediction"</span>) <span class="sc">+</span></span>
-<span id="cb44-10"><a href="#cb44-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb35"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a>shap_vals <span class="ot">&lt;-</span> <span class="fu">predict_parts</span>(</span>
+<span id="cb35-2"><a href="#cb35-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">explainer       =</span> explainer,</span>
+<span id="cb35-3"><a href="#cb35-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">new_observation =</span> obs_to_explain,</span>
+<span id="cb35-4"><a href="#cb35-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">type            =</span> <span class="st">"shap"</span>,</span>
+<span id="cb35-5"><a href="#cb35-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">B               =</span> <span class="dv">15</span></span>
+<span id="cb35-6"><a href="#cb35-6" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb35-7"><a href="#cb35-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb35-8"><a href="#cb35-8" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(shap_vals) <span class="sc">+</span></span>
+<span id="cb35-9"><a href="#cb35-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"SHAP Values Single Prediction"</span>) <span class="sc">+</span></span>
+<span id="cb35-10"><a href="#cb35-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output-display">
 <div>
 <figure class="figure">
@@ -727,126 +680,75 @@ Best CV RMSE: 2.6073 at round 335</code></pre>
 <p>We predict each team member’s expected wage by constructing their profile using the one-hot encoded feature space. All columns default to 0, and we set the relevant ones to 1 based on each person’s actual characteristics.</p>
 <p><strong>Edit the values below to match your real team profiles.</strong></p>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb45"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb45-1"><a href="#cb45-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Zero-filled template with all XGBoost features</span></span>
-<span id="cb45-2"><a href="#cb45-2" aria-hidden="true" tabindex="-1"></a>template_xgb <span class="ot">&lt;-</span> <span class="fu">as.data.frame</span>(<span class="fu">matrix</span>(<span class="dv">0</span>, <span class="at">nrow =</span> <span class="dv">1</span>, <span class="at">ncol =</span> <span class="fu">ncol</span>(X_train)))</span>
-<span id="cb45-3"><a href="#cb45-3" aria-hidden="true" tabindex="-1"></a><span class="fu">colnames</span>(template_xgb) <span class="ot">&lt;-</span> <span class="fu">colnames</span>(X_train)</span>
-<span id="cb45-4"><a href="#cb45-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb45-5"><a href="#cb45-5" aria-hidden="true" tabindex="-1"></a>make_xgb_profile <span class="ot">&lt;-</span> <span class="cf">function</span>(template, settings) {</span>
-<span id="cb45-6"><a href="#cb45-6" aria-hidden="true" tabindex="-1"></a>  profile <span class="ot">&lt;-</span> template</span>
-<span id="cb45-7"><a href="#cb45-7" aria-hidden="true" tabindex="-1"></a>  <span class="cf">for</span> (col <span class="cf">in</span> <span class="fu">names</span>(settings)) {</span>
-<span id="cb45-8"><a href="#cb45-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> (col <span class="sc">%in%</span> <span class="fu">colnames</span>(profile)) {</span>
-<span id="cb45-9"><a href="#cb45-9" aria-hidden="true" tabindex="-1"></a>      profile[[col]] <span class="ot">&lt;-</span> settings[[col]]</span>
-<span id="cb45-10"><a href="#cb45-10" aria-hidden="true" tabindex="-1"></a>    } <span class="cf">else</span> {</span>
-<span id="cb45-11"><a href="#cb45-11" aria-hidden="true" tabindex="-1"></a>      <span class="fu">warning</span>(<span class="fu">paste</span>(<span class="st">"Column not found:"</span>, col))</span>
-<span id="cb45-12"><a href="#cb45-12" aria-hidden="true" tabindex="-1"></a>    }</span>
-<span id="cb45-13"><a href="#cb45-13" aria-hidden="true" tabindex="-1"></a>  }</span>
-<span id="cb45-14"><a href="#cb45-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">return</span>(profile)</span>
-<span id="cb45-15"><a href="#cb45-15" aria-hidden="true" tabindex="-1"></a>}</span>
-<span id="cb45-16"><a href="#cb45-16" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb45-17"><a href="#cb45-17" aria-hidden="true" tabindex="-1"></a><span class="co"># ---- Team Member 1 ---- (edit these!)</span></span>
-<span id="cb45-18"><a href="#cb45-18" aria-hidden="true" tabindex="-1"></a>member1 <span class="ot">&lt;-</span> <span class="fu">make_xgb_profile</span>(template_xgb, <span class="fu">list</span>(</span>
-<span id="cb45-19"><a href="#cb45-19" aria-hidden="true" tabindex="-1"></a>  <span class="at">age.25.29                          =</span> <span class="dv">1</span>,</span>
-<span id="cb45-20"><a href="#cb45-20" aria-hidden="true" tabindex="-1"></a>  <span class="at">gender.Male                        =</span> <span class="dv">1</span>,</span>
-<span id="cb45-21"><a href="#cb45-21" aria-hidden="true" tabindex="-1"></a>  <span class="at">country.Switzerland                =</span> <span class="dv">1</span>,</span>
-<span id="cb45-22"><a href="#cb45-22" aria-hidden="true" tabindex="-1"></a>  <span class="at">education.Bachelor.s.degree         =</span> <span class="dv">1</span>,</span>
-<span id="cb45-23"><a href="#cb45-23" aria-hidden="true" tabindex="-1"></a>  <span class="at">undergraduate_major.Computer.science..software.engineering..etc.. =</span> <span class="dv">1</span>,</span>
-<span id="cb45-24"><a href="#cb45-24" aria-hidden="true" tabindex="-1"></a>  <span class="at">job_role.Software.Engineer            =</span> <span class="dv">1</span>,</span>
-<span id="cb45-25"><a href="#cb45-25" aria-hidden="true" tabindex="-1"></a>  <span class="at">years_experience.1.2               =</span> <span class="dv">1</span>,</span>
-<span id="cb45-26"><a href="#cb45-26" aria-hidden="true" tabindex="-1"></a>  <span class="at">Programming_Python                 =</span> <span class="dv">1</span>,</span>
-<span id="cb45-27"><a href="#cb45-27" aria-hidden="true" tabindex="-1"></a>  <span class="at">Programming_Java =</span> <span class="dv">1</span>,</span>
-<span id="cb45-28"><a href="#cb45-28" aria-hidden="true" tabindex="-1"></a>  <span class="at">Programming_Javascript.Typescript =</span> <span class="dv">1</span>,</span>
-<span id="cb45-29"><a href="#cb45-29" aria-hidden="true" tabindex="-1"></a>  <span class="at">ML_framework_PyTorch =</span> <span class="dv">1</span>,</span>
-<span id="cb45-30"><a href="#cb45-30" aria-hidden="true" tabindex="-1"></a><span class="at">ML_framework_Xgboost =</span> <span class="dv">1</span>,</span>
-<span id="cb45-31"><a href="#cb45-31" aria-hidden="true" tabindex="-1"></a><span class="at">ML_framework_randomForest =</span> <span class="dv">1</span>,</span>
-<span id="cb45-32"><a href="#cb45-32" aria-hidden="true" tabindex="-1"></a>  <span class="at">Programming_R                      =</span> <span class="dv">1</span>,</span>
-<span id="cb45-33"><a href="#cb45-33" aria-hidden="true" tabindex="-1"></a>  <span class="at">Programming_SQL                    =</span> <span class="dv">1</span>,</span>
-<span id="cb45-34"><a href="#cb45-34" aria-hidden="true" tabindex="-1"></a>  <span class="at">ML_atwork.We.recently.started.using.ML.methods..i.e...models.in.production.for.less.than.2.years. =</span> <span class="dv">1</span>,</span>
-<span id="cb45-35"><a href="#cb45-35" aria-hidden="true" tabindex="-1"></a><span class="at">Visualization_ggplot2 =</span> <span class="dv">1</span>,</span>
-<span id="cb45-36"><a href="#cb45-36" aria-hidden="true" tabindex="-1"></a><span class="at">Visualization_Matplotlib =</span><span class="dv">1</span>,</span>
-<span id="cb45-37"><a href="#cb45-37" aria-hidden="true" tabindex="-1"></a><span class="at">Visualization_Shiny =</span> <span class="dv">1</span>,</span>
-<span id="cb45-38"><a href="#cb45-38" aria-hidden="true" tabindex="-1"></a><span class="at">Visualization_Plotly =</span> <span class="dv">1</span></span>
-<span id="cb45-39"><a href="#cb45-39" aria-hidden="true" tabindex="-1"></a>))</span>
-<span id="cb45-40"><a href="#cb45-40" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb45-41"><a href="#cb45-41" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb45-42"><a href="#cb45-42" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb45-43"><a href="#cb45-43" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb45-44"><a href="#cb45-44" aria-hidden="true" tabindex="-1"></a><span class="co"># ---- Team Member 2 ---- (edit these!)</span></span>
-<span id="cb45-45"><a href="#cb45-45" aria-hidden="true" tabindex="-1"></a>member2 <span class="ot">&lt;-</span> <span class="fu">make_xgb_profile</span>(template_xgb, <span class="fu">list</span>(</span>
-<span id="cb45-46"><a href="#cb45-46" aria-hidden="true" tabindex="-1"></a>  <span class="at">age.22.24                          =</span> <span class="dv">1</span>,</span>
-<span id="cb45-47"><a href="#cb45-47" aria-hidden="true" tabindex="-1"></a>  <span class="at">gender.Male                      =</span> <span class="dv">1</span>,</span>
-<span id="cb45-48"><a href="#cb45-48" aria-hidden="true" tabindex="-1"></a>  <span class="at">country.Switzerland                    =</span> <span class="dv">1</span>,</span>
-<span id="cb45-49"><a href="#cb45-49" aria-hidden="true" tabindex="-1"></a>  <span class="at">education.Bachelor.s.degree          =</span> <span class="dv">1</span>,</span>
-<span id="cb45-50"><a href="#cb45-50" aria-hidden="true" tabindex="-1"></a>  <span class="at">undergraduate_major.I.never.declared.a.major =</span> <span class="dv">1</span>,</span>
-<span id="cb45-51"><a href="#cb45-51" aria-hidden="true" tabindex="-1"></a>  <span class="at">job_role.Principal.Investigator =</span> <span class="dv">1</span>,</span>
-<span id="cb45-52"><a href="#cb45-52" aria-hidden="true" tabindex="-1"></a>  <span class="at">years_experience.0.1 =</span> <span class="dv">1</span>,</span>
-<span id="cb45-53"><a href="#cb45-53" aria-hidden="true" tabindex="-1"></a>  <span class="at">industry.Military.Security.Defense =</span> <span class="dv">1</span>,</span>
-<span id="cb45-54"><a href="#cb45-54" aria-hidden="true" tabindex="-1"></a>  <span class="at">Programming_Python =</span> <span class="dv">1</span>,</span>
-<span id="cb45-55"><a href="#cb45-55" aria-hidden="true" tabindex="-1"></a>  <span class="at">Programming_R =</span> <span class="dv">1</span>,</span>
-<span id="cb45-56"><a href="#cb45-56" aria-hidden="true" tabindex="-1"></a>  <span class="at">Programming_SQL =</span> <span class="dv">1</span>,</span>
-<span id="cb45-57"><a href="#cb45-57" aria-hidden="true" tabindex="-1"></a>  <span class="at">Programming_Bash =</span> <span class="dv">1</span></span>
-<span id="cb45-58"><a href="#cb45-58" aria-hidden="true" tabindex="-1"></a>))</span>
-<span id="cb45-59"><a href="#cb45-59" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb45-60"><a href="#cb45-60" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb45-61"><a href="#cb45-61" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb45-62"><a href="#cb45-62" aria-hidden="true" tabindex="-1"></a><span class="co"># ---- Team Member 3 ---- (edit these!)</span></span>
-<span id="cb45-63"><a href="#cb45-63" aria-hidden="true" tabindex="-1"></a>member3 <span class="ot">&lt;-</span> <span class="fu">make_xgb_profile</span>(template_xgb, <span class="fu">list</span>(</span>
-<span id="cb45-64"><a href="#cb45-64" aria-hidden="true" tabindex="-1"></a>  <span class="at">age.22.24                          =</span> <span class="dv">1</span>,</span>
-<span id="cb45-65"><a href="#cb45-65" aria-hidden="true" tabindex="-1"></a>  <span class="at">gender.Male                      =</span> <span class="dv">1</span>,</span>
-<span id="cb45-66"><a href="#cb45-66" aria-hidden="true" tabindex="-1"></a>  <span class="at">country.Switzerland                    =</span> <span class="dv">1</span>,</span>
-<span id="cb45-67"><a href="#cb45-67" aria-hidden="true" tabindex="-1"></a>  <span class="at">education.Bachelor.s.degree          =</span> <span class="dv">1</span>,</span>
-<span id="cb45-68"><a href="#cb45-68" aria-hidden="true" tabindex="-1"></a>  <span class="at">undergraduate_major.Computer.science..software.engineering..etc.. =</span> <span class="dv">1</span>,</span>
-<span id="cb45-69"><a href="#cb45-69" aria-hidden="true" tabindex="-1"></a>  <span class="at">job_role.Data.Analyst =</span> <span class="dv">1</span>,</span>
-<span id="cb45-70"><a href="#cb45-70" aria-hidden="true" tabindex="-1"></a>  <span class="at">years_experience.1.2 =</span> <span class="dv">1</span>,</span>
-<span id="cb45-71"><a href="#cb45-71" aria-hidden="true" tabindex="-1"></a>  <span class="at">industry.Computers.Technology =</span> <span class="dv">1</span>,</span>
-<span id="cb45-72"><a href="#cb45-72" aria-hidden="true" tabindex="-1"></a>  <span class="at">Programming_Python =</span> <span class="dv">1</span>,</span>
-<span id="cb45-73"><a href="#cb45-73" aria-hidden="true" tabindex="-1"></a>  <span class="at">Programming_R =</span> <span class="dv">1</span>,</span>
-<span id="cb45-74"><a href="#cb45-74" aria-hidden="true" tabindex="-1"></a>  <span class="at">Programming_SQL =</span> <span class="dv">1</span>,</span>
-<span id="cb45-75"><a href="#cb45-75" aria-hidden="true" tabindex="-1"></a>  <span class="at">Programming_Bash =</span> <span class="dv">1</span>,</span>
-<span id="cb45-76"><a href="#cb45-76" aria-hidden="true" tabindex="-1"></a>  <span class="at">Programming_Javascript.Typescript =</span> <span class="dv">1</span>,</span>
-<span id="cb45-77"><a href="#cb45-77" aria-hidden="true" tabindex="-1"></a>  <span class="at">ML_framework_PyTorch =</span> <span class="dv">1</span>,</span>
-<span id="cb45-78"><a href="#cb45-78" aria-hidden="true" tabindex="-1"></a>  <span class="at">ML_framework_Xgboost =</span> <span class="dv">1</span>,</span>
-<span id="cb45-79"><a href="#cb45-79" aria-hidden="true" tabindex="-1"></a>  <span class="at">ML_framework_randomForest =</span> <span class="dv">1</span>,</span>
-<span id="cb45-80"><a href="#cb45-80" aria-hidden="true" tabindex="-1"></a>  <span class="at">ML_framework_H20 =</span> <span class="dv">1</span>,</span>
-<span id="cb45-81"><a href="#cb45-81" aria-hidden="true" tabindex="-1"></a>  <span class="at">Visualization_ggplot2 =</span> <span class="dv">1</span>,</span>
-<span id="cb45-82"><a href="#cb45-82" aria-hidden="true" tabindex="-1"></a>  <span class="at">Visualization_Shiny =</span> <span class="dv">1</span>,</span>
-<span id="cb45-83"><a href="#cb45-83" aria-hidden="true" tabindex="-1"></a><span class="at">Visualization_Plotly =</span> <span class="dv">1</span></span>
-<span id="cb45-84"><a href="#cb45-84" aria-hidden="true" tabindex="-1"></a>))</span>
-<span id="cb45-85"><a href="#cb45-85" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb45-86"><a href="#cb45-86" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb45-87"><a href="#cb45-87" aria-hidden="true" tabindex="-1"></a><span class="co"># Predict</span></span>
-<span id="cb45-88"><a href="#cb45-88" aria-hidden="true" tabindex="-1"></a>team_profiles   <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(member1, member2, member3)</span>
-<span id="cb45-89"><a href="#cb45-89" aria-hidden="true" tabindex="-1"></a>team_dmatrix    <span class="ot">&lt;-</span> <span class="fu">xgb.DMatrix</span>(<span class="fu">as.matrix</span>(team_profiles))</span>
-<span id="cb45-90"><a href="#cb45-90" aria-hidden="true" tabindex="-1"></a>team_log_preds  <span class="ot">&lt;-</span> <span class="fu">predict</span>(xgb_model, team_dmatrix)</span>
-<span id="cb45-91"><a href="#cb45-91" aria-hidden="true" tabindex="-1"></a>team_wage_preds <span class="ot">&lt;-</span> <span class="fu">expm1</span>(team_log_preds)</span>
-<span id="cb45-92"><a href="#cb45-92" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb45-93"><a href="#cb45-93" aria-hidden="true" tabindex="-1"></a>team_results <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
-<span id="cb45-94"><a href="#cb45-94" aria-hidden="true" tabindex="-1"></a>  <span class="at">Member         =</span> <span class="fu">c</span>(<span class="st">"Deniz"</span>, <span class="st">"Thiraviyachelvam"</span>, <span class="st">"Sen"</span>),</span>
-<span id="cb45-95"><a href="#cb45-95" aria-hidden="true" tabindex="-1"></a>  <span class="at">Predicted_Wage =</span> <span class="fu">paste0</span>(<span class="st">"$"</span>, <span class="fu">format</span>(<span class="fu">round</span>(team_wage_preds, <span class="dv">0</span>), <span class="at">big.mark =</span> <span class="st">","</span>))</span>
-<span id="cb45-96"><a href="#cb45-96" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb45-97"><a href="#cb45-97" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb45-98"><a href="#cb45-98" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(team_results)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb36"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Zero-filled template</span></span>
+<span id="cb36-2"><a href="#cb36-2" aria-hidden="true" tabindex="-1"></a>template_xgb <span class="ot">&lt;-</span> <span class="fu">as.data.frame</span>(<span class="fu">matrix</span>(<span class="dv">0</span>, <span class="at">nrow =</span> <span class="dv">3</span>, <span class="at">ncol =</span> <span class="fu">ncol</span>(X_train)))</span>
+<span id="cb36-3"><a href="#cb36-3" aria-hidden="true" tabindex="-1"></a><span class="fu">colnames</span>(template_xgb) <span class="ot">&lt;-</span> <span class="fu">colnames</span>(X_train)</span>
+<span id="cb36-4"><a href="#cb36-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb36-5"><a href="#cb36-5" aria-hidden="true" tabindex="-1"></a><span class="co"># ---- Member 1: Deniz ----</span></span>
+<span id="cb36-6"><a href="#cb36-6" aria-hidden="true" tabindex="-1"></a>template_xgb[<span class="st">"1"</span>, <span class="st">"age.25.29"</span>] <span class="ot">&lt;-</span> <span class="dv">1</span></span>
+<span id="cb36-7"><a href="#cb36-7" aria-hidden="true" tabindex="-1"></a>template_xgb[<span class="st">"1"</span>, <span class="st">"gender.Male"</span>] <span class="ot">&lt;-</span> <span class="dv">1</span></span>
+<span id="cb36-8"><a href="#cb36-8" aria-hidden="true" tabindex="-1"></a>template_xgb[<span class="st">"1"</span>, <span class="st">"country.Switzerland"</span>] <span class="ot">&lt;-</span> <span class="dv">1</span></span>
+<span id="cb36-9"><a href="#cb36-9" aria-hidden="true" tabindex="-1"></a>template_xgb[<span class="st">"1"</span>, <span class="st">"education.Bachelor.s.degree"</span>] <span class="ot">&lt;-</span> <span class="dv">1</span></span>
+<span id="cb36-10"><a href="#cb36-10" aria-hidden="true" tabindex="-1"></a>template_xgb[<span class="st">"1"</span>, <span class="st">"job_role.Software.Engineer"</span>] <span class="ot">&lt;-</span> <span class="dv">1</span></span>
+<span id="cb36-11"><a href="#cb36-11" aria-hidden="true" tabindex="-1"></a>template_xgb[<span class="st">"1"</span>, <span class="st">"years_experience.1.2"</span>] <span class="ot">&lt;-</span> <span class="dv">1</span></span>
+<span id="cb36-12"><a href="#cb36-12" aria-hidden="true" tabindex="-1"></a>template_xgb[<span class="st">"1"</span>, <span class="st">"Programming_Python"</span>] <span class="ot">&lt;-</span> <span class="dv">1</span></span>
+<span id="cb36-13"><a href="#cb36-13" aria-hidden="true" tabindex="-1"></a>template_xgb[<span class="st">"1"</span>, <span class="st">"Programming_R"</span>] <span class="ot">&lt;-</span> <span class="dv">1</span></span>
+<span id="cb36-14"><a href="#cb36-14" aria-hidden="true" tabindex="-1"></a>template_xgb[<span class="st">"1"</span>, <span class="st">"Programming_SQL"</span>] <span class="ot">&lt;-</span> <span class="dv">1</span></span>
+<span id="cb36-15"><a href="#cb36-15" aria-hidden="true" tabindex="-1"></a>template_xgb[<span class="st">"1"</span>, <span class="st">"ML_framework_PyTorch"</span>] <span class="ot">&lt;-</span> <span class="dv">1</span></span>
+<span id="cb36-16"><a href="#cb36-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb36-17"><a href="#cb36-17" aria-hidden="true" tabindex="-1"></a><span class="co"># ---- Member 2: Thiraviyachelvam ----</span></span>
+<span id="cb36-18"><a href="#cb36-18" aria-hidden="true" tabindex="-1"></a>template_xgb[<span class="st">"2"</span>, <span class="st">"age.22.24"</span>] <span class="ot">&lt;-</span> <span class="dv">1</span></span>
+<span id="cb36-19"><a href="#cb36-19" aria-hidden="true" tabindex="-1"></a>template_xgb[<span class="st">"2"</span>, <span class="st">"gender.Male"</span>] <span class="ot">&lt;-</span> <span class="dv">1</span></span>
+<span id="cb36-20"><a href="#cb36-20" aria-hidden="true" tabindex="-1"></a>template_xgb[<span class="st">"2"</span>, <span class="st">"country.Switzerland"</span>] <span class="ot">&lt;-</span> <span class="dv">1</span></span>
+<span id="cb36-21"><a href="#cb36-21" aria-hidden="true" tabindex="-1"></a>template_xgb[<span class="st">"2"</span>, <span class="st">"education.Bachelor.s.degree"</span>] <span class="ot">&lt;-</span> <span class="dv">1</span></span>
+<span id="cb36-22"><a href="#cb36-22" aria-hidden="true" tabindex="-1"></a>template_xgb[<span class="st">"2"</span>, <span class="st">"job_role.Principal.Investigator"</span>] <span class="ot">&lt;-</span> <span class="dv">1</span></span>
+<span id="cb36-23"><a href="#cb36-23" aria-hidden="true" tabindex="-1"></a>template_xgb[<span class="st">"2"</span>, <span class="st">"years_experience.0.1"</span>] <span class="ot">&lt;-</span> <span class="dv">1</span></span>
+<span id="cb36-24"><a href="#cb36-24" aria-hidden="true" tabindex="-1"></a>template_xgb[<span class="st">"2"</span>, <span class="st">"Programming_Python"</span>] <span class="ot">&lt;-</span> <span class="dv">1</span></span>
+<span id="cb36-25"><a href="#cb36-25" aria-hidden="true" tabindex="-1"></a>template_xgb[<span class="st">"2"</span>, <span class="st">"Programming_R"</span>] <span class="ot">&lt;-</span> <span class="dv">1</span></span>
+<span id="cb36-26"><a href="#cb36-26" aria-hidden="true" tabindex="-1"></a>template_xgb[<span class="st">"2"</span>, <span class="st">"Programming_SQL"</span>] <span class="ot">&lt;-</span> <span class="dv">1</span></span>
+<span id="cb36-27"><a href="#cb36-27" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb36-28"><a href="#cb36-28" aria-hidden="true" tabindex="-1"></a><span class="co"># ---- Member 3: Sen ----</span></span>
+<span id="cb36-29"><a href="#cb36-29" aria-hidden="true" tabindex="-1"></a>template_xgb[<span class="st">"3"</span>, <span class="st">"age.22.24"</span>] <span class="ot">&lt;-</span> <span class="dv">1</span></span>
+<span id="cb36-30"><a href="#cb36-30" aria-hidden="true" tabindex="-1"></a>template_xgb[<span class="st">"3"</span>, <span class="st">"gender.Male"</span>] <span class="ot">&lt;-</span> <span class="dv">1</span></span>
+<span id="cb36-31"><a href="#cb36-31" aria-hidden="true" tabindex="-1"></a>template_xgb[<span class="st">"3"</span>, <span class="st">"country.Switzerland"</span>] <span class="ot">&lt;-</span> <span class="dv">1</span></span>
+<span id="cb36-32"><a href="#cb36-32" aria-hidden="true" tabindex="-1"></a>template_xgb[<span class="st">"3"</span>, <span class="st">"education.Bachelor.s.degree"</span>] <span class="ot">&lt;-</span> <span class="dv">1</span></span>
+<span id="cb36-33"><a href="#cb36-33" aria-hidden="true" tabindex="-1"></a>template_xgb[<span class="st">"3"</span>, <span class="st">"job_role.Data.Analyst"</span>] <span class="ot">&lt;-</span> <span class="dv">1</span></span>
+<span id="cb36-34"><a href="#cb36-34" aria-hidden="true" tabindex="-1"></a>template_xgb[<span class="st">"3"</span>, <span class="st">"years_experience.1.2"</span>] <span class="ot">&lt;-</span> <span class="dv">1</span></span>
+<span id="cb36-35"><a href="#cb36-35" aria-hidden="true" tabindex="-1"></a>template_xgb[<span class="st">"3"</span>, <span class="st">"Programming_Python"</span>] <span class="ot">&lt;-</span> <span class="dv">1</span></span>
+<span id="cb36-36"><a href="#cb36-36" aria-hidden="true" tabindex="-1"></a>template_xgb[<span class="st">"3"</span>, <span class="st">"Programming_R"</span>] <span class="ot">&lt;-</span> <span class="dv">1</span></span>
+<span id="cb36-37"><a href="#cb36-37" aria-hidden="true" tabindex="-1"></a>template_xgb[<span class="st">"3"</span>, <span class="st">"Programming_SQL"</span>] <span class="ot">&lt;-</span> <span class="dv">1</span></span>
+<span id="cb36-38"><a href="#cb36-38" aria-hidden="true" tabindex="-1"></a>template_xgb[<span class="st">"3"</span>, <span class="st">"ML_framework_PyTorch"</span>] <span class="ot">&lt;-</span> <span class="dv">1</span></span>
+<span id="cb36-39"><a href="#cb36-39" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb36-40"><a href="#cb36-40" aria-hidden="true" tabindex="-1"></a><span class="co"># Predict</span></span>
+<span id="cb36-41"><a href="#cb36-41" aria-hidden="true" tabindex="-1"></a>team_dmatrix    <span class="ot">&lt;-</span> <span class="fu">xgb.DMatrix</span>(<span class="fu">as.matrix</span>(template_xgb))</span>
+<span id="cb36-42"><a href="#cb36-42" aria-hidden="true" tabindex="-1"></a>team_log_preds  <span class="ot">&lt;-</span> <span class="fu">predict</span>(xgb_model, team_dmatrix)</span>
+<span id="cb36-43"><a href="#cb36-43" aria-hidden="true" tabindex="-1"></a>team_wage_preds <span class="ot">&lt;-</span> <span class="fu">expm1</span>(team_log_preds)</span>
+<span id="cb36-44"><a href="#cb36-44" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb36-45"><a href="#cb36-45" aria-hidden="true" tabindex="-1"></a><span class="fu">data.frame</span>(</span>
+<span id="cb36-46"><a href="#cb36-46" aria-hidden="true" tabindex="-1"></a>  <span class="at">Member         =</span> <span class="fu">c</span>(<span class="st">"Deniz"</span>, <span class="st">"Thiraviyachelvam"</span>, <span class="st">"Sen"</span>),</span>
+<span id="cb36-47"><a href="#cb36-47" aria-hidden="true" tabindex="-1"></a>  <span class="at">Predicted_Wage =</span> <span class="fu">paste0</span>(<span class="st">"$"</span>, <span class="fu">format</span>(<span class="fu">round</span>(team_wage_preds, <span class="dv">0</span>), <span class="at">big.mark =</span> <span class="st">","</span>))</span>
+<span id="cb36-48"><a href="#cb36-48" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>            Member Predicted_Wage
-1            Deniz        $56,555
-2 Thiraviyachelvam        $25,236
-3              Sen        $21,354</code></pre>
+1            Deniz        $48,501
+2 Thiraviyachelvam        $16,302
+3              Sen        $14,988</code></pre>
 </div>
 </div>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb47"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb47-1"><a href="#cb47-1" aria-hidden="true" tabindex="-1"></a>team_plot_df <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
-<span id="cb47-2"><a href="#cb47-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">Member =</span> <span class="fu">c</span>(<span class="st">"Deniz"</span>, <span class="st">"Thiraviyachelvam"</span>, <span class="st">"Sen"</span>),</span>
-<span id="cb47-3"><a href="#cb47-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">Wage   =</span> team_wage_preds</span>
-<span id="cb47-4"><a href="#cb47-4" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb47-5"><a href="#cb47-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb47-6"><a href="#cb47-6" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(team_plot_df, <span class="fu">aes</span>(<span class="at">x =</span> Member, <span class="at">y =</span> Wage, <span class="at">fill =</span> Member)) <span class="sc">+</span></span>
-<span id="cb47-7"><a href="#cb47-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_col</span>(<span class="at">alpha =</span> <span class="fl">0.85</span>, <span class="at">width =</span> <span class="fl">0.5</span>) <span class="sc">+</span></span>
-<span id="cb47-8"><a href="#cb47-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_text</span>(<span class="fu">aes</span>(<span class="at">label =</span> <span class="fu">paste0</span>(<span class="st">"$"</span>, <span class="fu">format</span>(<span class="fu">round</span>(Wage, <span class="dv">0</span>), <span class="at">big.mark =</span> <span class="st">","</span>))),</span>
-<span id="cb47-9"><a href="#cb47-9" aria-hidden="true" tabindex="-1"></a>            <span class="at">vjust =</span> <span class="sc">-</span><span class="fl">0.5</span>, <span class="at">fontface =</span> <span class="st">"bold"</span>) <span class="sc">+</span></span>
-<span id="cb47-10"><a href="#cb47-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_fill_brewer</span>(<span class="at">palette =</span> <span class="st">"Set2"</span>) <span class="sc">+</span></span>
-<span id="cb47-11"><a href="#cb47-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Predicted Wages for Team Members"</span>,</span>
-<span id="cb47-12"><a href="#cb47-12" aria-hidden="true" tabindex="-1"></a>       <span class="at">x =</span> <span class="cn">NULL</span>, <span class="at">y =</span> <span class="st">"Predicted Wage (USD)"</span>) <span class="sc">+</span></span>
-<span id="cb47-13"><a href="#cb47-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>() <span class="sc">+</span></span>
-<span id="cb47-14"><a href="#cb47-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme</span>(<span class="at">legend.position =</span> <span class="st">"none"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb38"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a><span class="fu">data.frame</span>(</span>
+<span id="cb38-2"><a href="#cb38-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">Member =</span> <span class="fu">c</span>(<span class="st">"Deniz"</span>, <span class="st">"Thiraviyachelvam"</span>, <span class="st">"Sen"</span>),</span>
+<span id="cb38-3"><a href="#cb38-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">Wage   =</span> team_wage_preds</span>
+<span id="cb38-4"><a href="#cb38-4" aria-hidden="true" tabindex="-1"></a>) <span class="sc">%&gt;%</span></span>
+<span id="cb38-5"><a href="#cb38-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> Member, <span class="at">y =</span> Wage, <span class="at">fill =</span> Member)) <span class="sc">+</span></span>
+<span id="cb38-6"><a href="#cb38-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_col</span>(<span class="at">alpha =</span> <span class="fl">0.85</span>, <span class="at">width =</span> <span class="fl">0.5</span>) <span class="sc">+</span></span>
+<span id="cb38-7"><a href="#cb38-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_text</span>(<span class="fu">aes</span>(<span class="at">label =</span> <span class="fu">paste0</span>(<span class="st">"$"</span>, <span class="fu">format</span>(<span class="fu">round</span>(Wage, <span class="dv">0</span>), <span class="at">big.mark =</span> <span class="st">","</span>))),</span>
+<span id="cb38-8"><a href="#cb38-8" aria-hidden="true" tabindex="-1"></a>            <span class="at">vjust =</span> <span class="sc">-</span><span class="fl">0.5</span>, <span class="at">fontface =</span> <span class="st">"bold"</span>) <span class="sc">+</span></span>
+<span id="cb38-9"><a href="#cb38-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_fill_brewer</span>(<span class="at">palette =</span> <span class="st">"Set2"</span>) <span class="sc">+</span></span>
+<span id="cb38-10"><a href="#cb38-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Predicted Wages for Team Members"</span>,</span>
+<span id="cb38-11"><a href="#cb38-11" aria-hidden="true" tabindex="-1"></a>       <span class="at">x =</span> <span class="cn">NULL</span>, <span class="at">y =</span> <span class="st">"Predicted Wage (USD)"</span>) <span class="sc">+</span></span>
+<span id="cb38-12"><a href="#cb38-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>() <span class="sc">+</span></span>
+<span id="cb38-13"><a href="#cb38-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme</span>(<span class="at">legend.position =</span> <span class="st">"none"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output-display">
 <div>
 <figure class="figure">
@@ -856,15 +758,22 @@ Best CV RMSE: 2.6073 at round 335</code></pre>
 </div>
 </div>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb48"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb48-1"><a href="#cb48-1" aria-hidden="true" tabindex="-1"></a>shap_m1 <span class="ot">&lt;-</span> <span class="fu">predict_parts</span>(</span>
-<span id="cb48-2"><a href="#cb48-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">explainer       =</span> explainer,</span>
-<span id="cb48-3"><a href="#cb48-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">new_observation =</span> member1,</span>
-<span id="cb48-4"><a href="#cb48-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">type            =</span> <span class="st">"shap"</span>,</span>
-<span id="cb48-5"><a href="#cb48-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">B               =</span> <span class="dv">15</span></span>
-<span id="cb48-6"><a href="#cb48-6" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb48-7"><a href="#cb48-7" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(shap_m1) <span class="sc">+</span></span>
-<span id="cb48-8"><a href="#cb48-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"SHAP Values Deniz"</span>) <span class="sc">+</span></span>
-<span id="cb48-9"><a href="#cb48-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb39"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a>shap_m1 <span class="ot">&lt;-</span> <span class="fu">predict_parts</span>(</span>
+<span id="cb39-2"><a href="#cb39-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">explainer       =</span> explainer,</span>
+<span id="cb39-3"><a href="#cb39-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">new_observation =</span> template_xgb[<span class="dv">1</span>, ],</span>
+<span id="cb39-4"><a href="#cb39-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">type            =</span> <span class="st">"shap"</span>,</span>
+<span id="cb39-5"><a href="#cb39-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">B               =</span> <span class="dv">15</span></span>
+<span id="cb39-6"><a href="#cb39-6" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb39-7"><a href="#cb39-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb39-8"><a href="#cb39-8" aria-hidden="true" tabindex="-1"></a>bd1 <span class="ot">&lt;-</span> <span class="fu">predict_parts</span>(</span>
+<span id="cb39-9"><a href="#cb39-9" aria-hidden="true" tabindex="-1"></a>  <span class="at">explainer       =</span> explainer,</span>
+<span id="cb39-10"><a href="#cb39-10" aria-hidden="true" tabindex="-1"></a>  <span class="at">new_observation =</span> template_xgb[<span class="dv">1</span>, ],</span>
+<span id="cb39-11"><a href="#cb39-11" aria-hidden="true" tabindex="-1"></a>  <span class="at">type            =</span> <span class="st">"break_down"</span></span>
+<span id="cb39-12"><a href="#cb39-12" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb39-13"><a href="#cb39-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb39-14"><a href="#cb39-14" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(bd1) <span class="sc">+</span></span>
+<span id="cb39-15"><a href="#cb39-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Break-Down Explanation Deniz"</span>) <span class="sc">+</span></span>
+<span id="cb39-16"><a href="#cb39-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output-display">
 <div>
 <figure class="figure">
@@ -872,89 +781,89 @@ Best CV RMSE: 2.6073 at round 335</code></pre>
 </figure>
 </div>
 </div>
-</div>
-<div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb49"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb49-1"><a href="#cb49-1" aria-hidden="true" tabindex="-1"></a>shap_m2 <span class="ot">&lt;-</span> <span class="fu">predict_parts</span>(</span>
-<span id="cb49-2"><a href="#cb49-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">explainer       =</span> explainer,</span>
-<span id="cb49-3"><a href="#cb49-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">new_observation =</span> member2,</span>
-<span id="cb49-4"><a href="#cb49-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">type            =</span> <span class="st">"shap"</span>,</span>
-<span id="cb49-5"><a href="#cb49-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">B               =</span> <span class="dv">15</span></span>
-<span id="cb49-6"><a href="#cb49-6" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb49-7"><a href="#cb49-7" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(shap_m2) <span class="sc">+</span></span>
-<span id="cb49-8"><a href="#cb49-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"SHAP Values Thiraviyachelvam"</span>) <span class="sc">+</span></span>
-<span id="cb49-9"><a href="#cb49-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb40"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb40-1"><a href="#cb40-1" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(shap_m1) <span class="sc">+</span></span>
+<span id="cb40-2"><a href="#cb40-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"SHAP Values Deniz"</span>) <span class="sc">+</span></span>
+<span id="cb40-3"><a href="#cb40-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output-display">
 <div>
 <figure class="figure">
-<p><img src="Assigment_files/figure-html/shap-member2-1.png" class="img-fluid figure-img" width="864"></p>
+<p><img src="Assigment_files/figure-html/shap-member1-2.png" class="img-fluid figure-img" width="864"></p>
+</figure>
+</div>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb41"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb41-1"><a href="#cb41-1" aria-hidden="true" tabindex="-1"></a>shap_m2 <span class="ot">&lt;-</span> <span class="fu">predict_parts</span>(</span>
+<span id="cb41-2"><a href="#cb41-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">explainer       =</span> explainer,</span>
+<span id="cb41-3"><a href="#cb41-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">new_observation =</span> template_xgb[<span class="dv">2</span>, ],</span>
+<span id="cb41-4"><a href="#cb41-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">type            =</span> <span class="st">"shap"</span>,</span>
+<span id="cb41-5"><a href="#cb41-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">B               =</span> <span class="dv">15</span></span>
+<span id="cb41-6"><a href="#cb41-6" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb41-7"><a href="#cb41-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-8"><a href="#cb41-8" aria-hidden="true" tabindex="-1"></a>bd2 <span class="ot">&lt;-</span> <span class="fu">predict_parts</span>(</span>
+<span id="cb41-9"><a href="#cb41-9" aria-hidden="true" tabindex="-1"></a>  <span class="at">explainer       =</span> explainer,</span>
+<span id="cb41-10"><a href="#cb41-10" aria-hidden="true" tabindex="-1"></a>  <span class="at">new_observation =</span> template_xgb[<span class="dv">2</span>, ],</span>
+<span id="cb41-11"><a href="#cb41-11" aria-hidden="true" tabindex="-1"></a>  <span class="at">type            =</span> <span class="st">"break_down"</span></span>
+<span id="cb41-12"><a href="#cb41-12" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb41-13"><a href="#cb41-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-14"><a href="#cb41-14" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(bd2) <span class="sc">+</span></span>
+<span id="cb41-15"><a href="#cb41-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Break-Down Explanation Thiraviyachelvam"</span>) <span class="sc">+</span></span>
+<span id="cb41-16"><a href="#cb41-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="Assigment_files/figure-html/shap-member1-3.png" class="img-fluid figure-img" width="864"></p>
+</figure>
+</div>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb42"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb42-1"><a href="#cb42-1" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(shap_m2) <span class="sc">+</span></span>
+<span id="cb42-2"><a href="#cb42-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"SHAP Values Thiraviyachelvam"</span>) <span class="sc">+</span></span>
+<span id="cb42-3"><a href="#cb42-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="Assigment_files/figure-html/shap-member1-4.png" class="img-fluid figure-img" width="864"></p>
+</figure>
+</div>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb43"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb43-1"><a href="#cb43-1" aria-hidden="true" tabindex="-1"></a>shap_m3 <span class="ot">&lt;-</span> <span class="fu">predict_parts</span>(</span>
+<span id="cb43-2"><a href="#cb43-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">explainer       =</span> explainer,</span>
+<span id="cb43-3"><a href="#cb43-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">new_observation =</span> template_xgb[<span class="dv">3</span>, ],</span>
+<span id="cb43-4"><a href="#cb43-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">type            =</span> <span class="st">"shap"</span>,</span>
+<span id="cb43-5"><a href="#cb43-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">B               =</span> <span class="dv">15</span></span>
+<span id="cb43-6"><a href="#cb43-6" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb43-7"><a href="#cb43-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb43-8"><a href="#cb43-8" aria-hidden="true" tabindex="-1"></a>bd3 <span class="ot">&lt;-</span> <span class="fu">predict_parts</span>(</span>
+<span id="cb43-9"><a href="#cb43-9" aria-hidden="true" tabindex="-1"></a>  <span class="at">explainer       =</span> explainer,</span>
+<span id="cb43-10"><a href="#cb43-10" aria-hidden="true" tabindex="-1"></a>  <span class="at">new_observation =</span> template_xgb[<span class="dv">3</span>, ],</span>
+<span id="cb43-11"><a href="#cb43-11" aria-hidden="true" tabindex="-1"></a>  <span class="at">type            =</span> <span class="st">"break_down"</span></span>
+<span id="cb43-12"><a href="#cb43-12" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb43-13"><a href="#cb43-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb43-14"><a href="#cb43-14" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(bd2) <span class="sc">+</span></span>
+<span id="cb43-15"><a href="#cb43-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Break-Down Explanation Sen"</span>) <span class="sc">+</span></span>
+<span id="cb43-16"><a href="#cb43-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="Assigment_files/figure-html/shap-member1-5.png" class="img-fluid figure-img" width="864"></p>
+</figure>
+</div>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb44"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb44-1"><a href="#cb44-1" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(shap_m3) <span class="sc">+</span></span>
+<span id="cb44-2"><a href="#cb44-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"SHAP Values Sen"</span>) <span class="sc">+</span></span>
+<span id="cb44-3"><a href="#cb44-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="Assigment_files/figure-html/shap-member1-6.png" class="img-fluid figure-img" width="864"></p>
 </figure>
 </div>
 </div>
 </div>
-<div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb50"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb50-1"><a href="#cb50-1" aria-hidden="true" tabindex="-1"></a>shap_m3 <span class="ot">&lt;-</span> <span class="fu">predict_parts</span>(</span>
-<span id="cb50-2"><a href="#cb50-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">explainer       =</span> explainer,</span>
-<span id="cb50-3"><a href="#cb50-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">new_observation =</span> member3,</span>
-<span id="cb50-4"><a href="#cb50-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">type            =</span> <span class="st">"shap"</span>,</span>
-<span id="cb50-5"><a href="#cb50-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">B               =</span> <span class="dv">15</span></span>
-<span id="cb50-6"><a href="#cb50-6" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb50-7"><a href="#cb50-7" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(shap_m3) <span class="sc">+</span></span>
-<span id="cb50-8"><a href="#cb50-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"SHAP Values Sen"</span>) <span class="sc">+</span></span>
-<span id="cb50-9"><a href="#cb50-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="cell-output-display">
-<div>
-<figure class="figure">
-<p><img src="Assigment_files/figure-html/shap-member3-1.png" class="img-fluid figure-img" width="864"></p>
-</figure>
-</div>
-</div>
-</div>
-<p><strong>Reflection</strong>: The predicted wages reflect population-level patterns from the Kaggle Data Science Survey. Country has the largest effect — Switzerland and Germany consistently predict higher wages than the global average, reflecting higher cost of living and strong data science markets. Experience and education level further refine predictions within each country. These estimates should be treated as benchmarks rather than precise forecasts, as individual factors like company size, negotiation, and specific skills are not captured in the survey.</p>
+<p>By examining the SHAP plots we can gain a clear understanding of how the model makes its wage predictions. A few features stand out as particularly strong influences. Most notably country and age. Most other features, including programming languages and even education level, appear to have relatively small individual effects and are often grouped together in the residual ‘other factors’ category. This pattern can be explained in two ways. First, outliers in the data may still be heavily influencing predictions despite our cleaning steps. Second, features like programming languages and education, while intuitively important, may not carry enough signal in this dataset to dominate the prediction individually. This does not mean the results are meaningless. It makes intuitive sense that a young person with little experience earns significantly less than someone with many years of experience living in a high-income country. However, the SHAP analysis also reveals the limitations of the dataset itself. Important wage drivers such as company size, local market conditions, and individual salary negotiations are not captured in the survey data. SHAP can only reflect what the data provides and in this case it essentially reflects average wages per country. It is worth noting that if the model were trained on data from a single country, predictions would likely be considerably more accurate, as country-level wage variance would be eliminated. This is both a self-critique of the dataset and a reflection of the modelling choices we made. Nevertheless, within the context of this project, the model provides a solid and interpretable baseline for predicting wages on a global scale.</p>
 <hr>
 </section>
-<section id="conclusions" class="level2">
-<h2 class="anchored" data-anchor-id="conclusions">7. Conclusions</h2>
-<section id="model-choice" class="level3">
-<h3 class="anchored" data-anchor-id="model-choice">Model Choice</h3>
-<p>We selected <strong>XGBoost</strong> as our sole model because it is the best-performing algorithm for tabular data with many sparse binary features. Its gradient boosting mechanism — building trees sequentially to correct previous errors — combined with strong regularisation parameters (<code>lambda</code>, <code>alpha</code>, <code>gamma</code>, <code>min_child_weight</code>) makes it particularly well-suited to noisy survey data.</p>
-</section>
-<section id="model-performance" class="level3">
-<h3 class="anchored" data-anchor-id="model-performance">Model Performance</h3>
-<ul>
-<li>R² = <strong>0.327</strong> on the held-out test set</li>
-<li>RMSE ≈ <strong>4.9544^{4} USD</strong> in original scale</li>
-<li>MAE ≈ <strong>2.5154^{4} USD</strong> in original scale</li>
-</ul>
-<p>An R² of ~0.31–0.40 is expected and acceptable for this dataset. The primary reasons are: (1) age and experience are bucketed ranges, not exact values; (2) wages are self-reported across vastly different countries and industries; (3) no continuous numeric predictors are available. This R² is consistent with published wage prediction models on similar survey datasets.</p>
-</section>
-<section id="feature-decisions" class="level3">
-<h3 class="anchored" data-anchor-id="feature-decisions">Feature Decisions</h3>
-<ul>
-<li><strong>Included</strong>: demographics (age, gender, country), education, experience, job role, industry, programming skills, ML tool usage, cloud platforms, activities, coding time percentage, ML experience years</li>
-<li><strong>Excluded</strong>: Columns with &gt;40% missing values</li>
-<li><strong>Transformed</strong>: All categoricals one-hot encoded (260+ features); wage log-transformed to address right skew</li>
-</ul>
-</section>
-<section id="key-drivers-of-wage" class="level3">
-<h3 class="anchored" data-anchor-id="key-drivers-of-wage">Key Drivers of Wage</h3>
-<p>Based on XGBoost feature importance (Gain) and SHAP values:</p>
-<ul>
-<li><strong>Country</strong> — the single strongest predictor, reflecting labour market and cost-of-living differences</li>
-<li><strong>Age and years of experience</strong> — strong positive relationship with wage</li>
-<li><strong>Job role</strong> — Chief Officers, Software Engineers, and Data Scientists predict higher wages</li>
-<li><strong>Education</strong> — Doctoral and Master’s degrees associated with higher wages</li>
-<li><strong>ML maturity at work</strong> — respondents at companies with established ML in production earn more</li>
-</ul>
-</section>
-<section id="limitations" class="level3">
-<h3 class="anchored" data-anchor-id="limitations">Limitations</h3>
-<ul>
-<li>The model captures survey-level patterns, not individual circumstances</li>
-<li>Wage brackets are self-reported and may be imprecise</li>
-<li>The dataset reflects the Kaggle community, which skews towards certain countries and roles</li>
-<li>Team predictions are benchmarks — actual salaries depend on company, negotiation, and local market conditions</li>
-</ul>
-</section>
+<section id="conlusion" class="level1">
+<h1>7 Conlusion</h1>
+<p>In this project we built a predictive model for wages using survey data from the Kaggle Data Science community. After testing three models, Linear Regression, Random Forest and XGBoost, we selected XGBoost as our final model based on its superior performance, computational efficiency and native SHAP compatibility. The model achieved an R² of approximately 0.33. While modest, this is expected given that wages are self-reported, globally diverse and influenced by factors not captured in the survey such as company size, local market conditions and individual negotiations. An interesting finding during our process was that excluding zero wages nearly doubled model accuracy, highlighting an important trade-off between predictive performance and representativeness of the full population. The explainability analysis showed that country and age are by far the strongest wage predictors, which aligns with real-world intuition. Programming languages and education showed relatively small individual effects. Not a failure of the model, but a reflection of the data available. For the team predictions, the model provided reasonable estimates for each member. Switzerland consistently predicted higher wages, reflecting its strong labour market and high cost of living. Looking ahead, the most impactful improvement would be richer data. Variables such as company size, city, years in current role and actual negotiated salaries would give the model considerably more signal. Building separate country-specific models would also eliminate the enormous wage variance introduced by combining vastly different labour markets into a single prediction. Overall this project gave us a solid understanding of the full machine learning pipeline from data cleaning and feature engineering through model selection, hyperparameter tuning and explainability. The model serves as a good baseline for global wage prediction, and with richer and more representative data, accuracy could be improved significantly.</p>
 </section>
 
 </main>

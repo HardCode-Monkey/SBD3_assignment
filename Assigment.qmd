@@ -4,6 +4,16 @@ format: html
 editor: visual
 ---
 
+In today's data-driven economy, understanding what drives wages has become increasingly important for both individuals and organisations. Wages depend on a wide range of factors such as country, education, job role, experience, and the technical skills a person brings to the table. Capturing these relationships in a single predictive model is challenging, but it provides valuable insights into how the labour market values different profiles.
+
+This project explores wage prediction based on a large global survey of data science professionals from Kaggle, containing 10'809 responses across 78 variables. Our goal is to build a model that predicts an individual's wage based on their demographic, educational, and professional characteristics, and to understand which factors drive these predictions the most.
+
+To achieve this, we apply XGBoost, a gradient boosting algorithm widely recognised as one of the best methods for tabular data. We complement the model with modern explainability techniques such as SHAP values and Partial Dependence Profiles, allowing us to interpret not only what the model predicts, but also why.
+
+The project follows a structured workflow. We begin with an exploratory analysis of the dataset to identify patterns and potential predictors. We then clean and transform the data, train and tune the model using cross-validation, and evaluate its performance on a held-out test set. Finally, we apply the model to our own profiles to predict our expected future wages and reflect critically on the results.
+
+The objectives of this work are threefold: first, to deliver a reliable and well-tuned predictive model; second, to make the model's decisions transparent and interpretable; and third, to honestly discuss the strengths and limitations of survey-based wage prediction in a global context.
+
 ## 1. Setup and Libraries
 
 We use `tidyverse` for data manipulation, `caret` for preprocessing, `xgboost` as our primary model, and `DALEX` for explainability.
@@ -284,107 +294,104 @@ cat("Total features after encoding:", ncol(X_train), "\n")
 
 ------------------------------------------------------------------------
 
-## 4. Model: XGBoost
+## 4. Choosing a model which makes sense
 
-### 4.1 Why XGBoost?
+We tested several models to identify the most suitable approach for our dataset, including Linear Regression, Random Forest, and XGBoost.
 
-We chose XGBoost (Extreme Gradient Boosting) as our model for the following reasons:
+Linear Regression was the first model we evaluated. However, it proved to be a poor fit for this problem. Linear Regression assumes straight-line relationships between features and the target variable, treating every feature's effect on wage as constant and additive. In reality, wages are far more complex. A Data Scientist in Switzerland with 5 years of experience earns disproportionately more than the sum of those individual factors would suggest. Real-world compensation is influenced by interactions between country, role, experience, and education that a linear model simply cannot capture. Wages do not follow a fixed rulebook, and assuming they do leads to systematic prediction errors.
 
--   **Best-in-class for tabular data**: XGBoost consistently outperforms other algorithms on structured datasets with mixed feature types
--   **Handles sparsity natively**: Our dataset has 260+ binary columns (programming languages, tools, activities) — XGBoost is specifically optimised for sparse inputs
--   **Gradient boosting**: Builds trees sequentially, each correcting the errors of the previous one, making it highly accurate
--   **Built-in regularisation**: `lambda`, `alpha`, `gamma`, and `min_child_weight` parameters prevent overfitting on noisy survey data
--   **SHAP compatibility**: Native SHAP support provides state-of-the-art explainability
+Random Forest was the second model we evaluated. While it performed significantly better than Linear Regression, it came with several weaknesses that made it unsuitable for our case.
 
-### 4.2 Hyperparameter Tuning
+The most significant issue was computation time. Training the Random Forest took approximately 25 minutes, which was far too slow for our workflow and made iterating and testing different configurations impractical.
 
-We use `xgb.cv` with 5-fold cross-validation to find the optimal number of boosting rounds, and tune key parameters to maximise R².
+Additionally, our dataset contains 260+ binary features, the majority of which are zero for any given respondent. This proved to be a fundamental problem for Random Forest. This combination of poor computational efficiency and difficulty handling sparse binary data made Random Forest a less suitable choice compared to XGBoost, which handles both of these issues natively.
 
-**Parameters explained:**
+XGBoost builds trees sequentially, meaning each new tree learns from the mistakes of the previous one. This boosting mechanism allows the model to progressively improve its predictions with every iteration, resulting in significantly higher accuracy compared to our previous models.
 
--   `eta` (0.05): Lower learning rate — each tree contributes less, requiring more rounds but producing a more robust model
--   `max_depth` (5): Tree depth — controls model complexity; 5 balances expressiveness and overfitting
--   `subsample` (0.8): Each tree sees 80% of training rows — adds randomness, reduces overfitting
--   `colsample_bytree` (0.7): Each tree sees 70% of features — forces diversity across trees
--   `min_child_weight` (5): Minimum observations in a leaf — prevents the model from learning noise in small subgroups
--   `gamma` (0.1): Minimum loss reduction to make a split — acts as pruning, improves generalisation
+XGBoost also handles our 260+ sparse binary features considerably better than Random Forest. Its built-in mechanism for dealing with zero values ensures that uninformative features do not weaken the model, which was a critical issue we encountered with Random Forest.
+
+Furthermore, XGBoost was significantly faster in terms of computation time. As it allowed us to test multiple configurations and tune hyperparameters efficiently without the 25-minute waiting times we experienced with Random Forest.
+
+Finally, we discovered that XGBoost offers native SHAP compatibility, which greatly simplified our explainability analysis. This allowed us to not only predict wages accurately but also gain a clear understanding of which features drive each individual prediction a key requirement of this assignment.
+
+### 4.1 Hyperparameter Tuning
+
+While XGBoost is a powerful algorithm, its default settings are not necessarily optimal for every dataset. This is why we tuned its hyperparameters.
+
+Through a process of trial and error we tested multiple parameter combinations using 5-fold cross-validation, evaluating each configuration on unseen data to ensure we selected settings that generalise well rather than simply memorising the training data. The parameters we tuned and their final values are:
+
+-   **`eta` (0.05)**: The learning rate. Controls how much each tree contributes to the final prediction. A lower value of 0.05 means the model learns slowly and precisely, reducing the risk of overshooting the optimal solution at the cost of requiring more boosting rounds.
+
+-   **`max_depth` (5)**: The maximum depth of each tree. Controls model complexity. A depth of 5 balances the ability to capture complex wage patterns without overfitting to noise in the survey data.
+
+-   **`subsample` (0.8)**: Each tree is trained on a random 80% of the training rows. Introducing randomness that prevents trees from becoming too similar to each other and improves generalisation.
+
+-   **`colsample_bytree` (0.7)**: Each tree sees a random 70% of features. Particularly useful for our dataset where many of the 260+ binary features are correlated with each other.
+
+-   **`min_child_weight` (5)**: The minimum number of observations required in a leaf node. Prevents the model from learning patterns that only apply to very small groups of respondents, which are likely noise rather than real wage signals.
+
+-   **`gamma` (0.1)**: The minimum loss reduction required to make a split. Acts as a pruning mechanism, ensuring the model only makes splits that meaningfully improve predictions.
 
 ```{r xgboost-tune, message=FALSE, warning=FALSE, cache=TRUE}
-# Grid of parameter combinations to try
-param_grid <- list(
-  list(eta=0.05, max_depth=4, min_child_weight=3,  gamma=0.0, subsample=0.8, colsample_bytree=0.7),
-  list(eta=0.05, max_depth=5, min_child_weight=3,  gamma=0.0, subsample=0.8, colsample_bytree=0.7),
-  list(eta=0.05, max_depth=6, min_child_weight=3,  gamma=0.0, subsample=0.8, colsample_bytree=0.8),
-  list(eta=0.05, max_depth=5, min_child_weight=1,  gamma=0.0, subsample=0.9, colsample_bytree=0.8),
-  list(eta=0.05, max_depth=6, min_child_weight=1,  gamma=0.1, subsample=0.8, colsample_bytree=0.6),
-  list(eta=0.03, max_depth=5, min_child_weight=3,  gamma=0.0, subsample=0.8, colsample_bytree=0.7),
-  list(eta=0.03, max_depth=6, min_child_weight=1,  gamma=0.0, subsample=0.9, colsample_bytree=0.8)
+# Best parameters found through trial and error
+best_params <- list(
+  objective        = "reg:squarederror",
+  eval_metric      = "rmse",
+  eta              = 0.05,
+  max_depth        = 5,
+  min_child_weight = 3,
+  gamma            = 0.0,
+  subsample        = 0.8,
+  colsample_bytree = 0.7,
+  lambda           = 1.0,
+  alpha            = 0.0
 )
 
-best_cv_rmse <- Inf
-best_params  <- NULL
-best_rounds  <- NULL
-
+# Use cross-validation to find optimal number of rounds
 set.seed(42)
-for (i in seq_along(param_grid)) {
-  p <- param_grid[[i]]
-  p$objective   <- "reg:squarederror"
-  p$eval_metric <- "rmse"
-  p$lambda      <- 1.0
-  p$alpha       <- 0.0
+xgb_cv <- xgb.cv(
+  data    = dtrain,
+  nrounds = 600,
+  nfold   = 5,
+  params  = best_params,
+  verbose = FALSE
+)
 
-  cv <- xgb.cv(
-    data    = dtrain,
-    nrounds = 600,
-    nfold   = 5,
-    params  = p,
-    verbose = FALSE
-  )
+best_nrounds <- which.min(xgb_cv$evaluation_log$test_rmse_mean)
+cat(sprintf("Best number of rounds: %d\n", best_nrounds))
 
-  min_rmse   <- min(cv$evaluation_log$test_rmse_mean)
-  best_round <- which.min(cv$evaluation_log$test_rmse_mean)
-
-  cat(sprintf("Config %d | depth=%d eta=%.2f mcw=%d | CV RMSE: %.4f (round %d)\n",
-              i, p$max_depth, p$eta, p$min_child_weight, min_rmse, best_round))
-
-  if (min_rmse < best_cv_rmse) {
-    best_cv_rmse <- min_rmse
-    best_params  <- p
-    best_rounds  <- best_round
-  }
-}
-
-cat(sprintf("\nBest CV RMSE: %.4f at round %d\n", best_cv_rmse, best_rounds))
-
-# Train final model with best params
+# Train final model
 set.seed(42)
 xgb_model <- xgb.train(
   data    = dtrain,
-  nrounds = best_rounds,
+  nrounds = best_nrounds,
   params  = best_params,
   verbose = 0
 )
+
+cat("Model training complete.\n")
 ```
 
-### 4.4 Model Evaluation
+### 4.2 Model Evaluation
 
-```{r xgboost-eval}
+```{r, xgboost-eval, message=FALSE, warning=FALSE, cache=TRUE}
 # Predictions
 xgb_preds_log  <- predict(xgb_model, dtest)
 xgb_preds_orig <- expm1(xgb_preds_log)
 actual_orig    <- expm1(y_test)
 
 # Metrics
-xgb_rmse_log  <- rmse(y_test,     xgb_preds_log)
+xgb_r2        <- cor(y_test, xgb_preds_log)^2
 xgb_rmse_orig <- rmse(actual_orig, xgb_preds_orig)
 xgb_mae_orig  <- mae(actual_orig,  xgb_preds_orig)
-xgb_r2        <- cor(y_test,      xgb_preds_log)^2
 
-cat("=== XGBoost Test Set Performance ===\n")
-cat(sprintf("R²:              %.4f\n", xgb_r2))
-cat(sprintf("RMSE (log):      %.4f\n", xgb_rmse_log))
-cat(sprintf("RMSE (USD):      %.1f\n", xgb_rmse_orig))
-cat(sprintf("MAE  (USD):      %.1f\n", xgb_mae_orig))
+# Results table
+data.frame(
+  Metric = c("R²", "RMSE (USD)", "MAE (USD)"),
+  Value  = c(round(xgb_r2, 3),
+             round(xgb_rmse_orig, 0),
+             round(xgb_mae_orig,  0))
+)
 ```
 
 Initially, the XGBoost model produced a lower than expected R² of approximately 0.33. During our investigation we discovered that excluding wages equal to zero nearly doubled the model's accuracy, bringing R² to approximately 0.65. After careful consideration however, we decided to retain the zero-wage observations in our final model. While their removal improves performance metrics, excluding them introduces a selection bias, students, unemployed respondents, and those who chose not to disclose their income are a real and meaningful part of the population. Removing them would make the model less representative of the full workforce and could lead to misleading predictions for profiles that resemble these groups.
@@ -399,42 +406,23 @@ residuals_df <- data.frame(
 # Actual vs Predicted
 p1 <- ggplot(residuals_df, aes(x = actual, y = predicted)) +
   geom_point(alpha = 0.3, color = "steelblue", size = 1) +
-  geom_abline(intercept = 0, slope = 1, color = "red", linetype = "dashed") +
-  labs(title = "Actual vs Predicted Wage",
-       x = "Actual Wage (USD)", y = "Predicted Wage (USD)") +
-  theme_minimal()
-
-# Residuals vs Predicted
-p2 <- ggplot(residuals_df, aes(x = predicted, y = residual)) +
-  geom_point(alpha = 0.3, color = "darkorange", size = 1) +
-  geom_hline(yintercept = 0, color = "red", linetype = "dashed") +
-  labs(title = "Residuals vs Predicted",
-       x = "Predicted Wage (USD)", y = "Residual") +
+  geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
+  labs(title = "Actual vs Predicted", x = "Actual (USD)", y = "Predicted (USD)") +
   theme_minimal()
 
 # Residual distribution
-p3 <- ggplot(residuals_df, aes(x = residual)) +
+p2 <- ggplot(residuals_df, aes(x = residual)) +
   geom_histogram(fill = "steelblue", bins = 40, alpha = 0.8) +
   geom_vline(xintercept = 0, color = "red", linetype = "dashed") +
-  labs(title = "Distribution of Residuals",
-       x = "Residual", y = "Count") +
+  labs(title = "Residual Distribution", x = "Residual (USD)", y = "Count") +
   theme_minimal()
 
-gridExtra::grid.arrange(p1, p2, p3, ncol = 3)
+gridExtra::grid.arrange(p1, p2, ncol = 2)
 ```
 
 To evaluate model performance visually we produce three diagnostic plots. The first plot shows Actual vs Predicted Wage, in a perfect model all points would fall exactly on the red dashed line. Points scattered around it indicate prediction errors, with points above the line meaning the model underestimated and points below meaning it overestimated. The second plot shows Residuals vs Predicted, residuals are the difference between actual and predicted wages. Ideally these should be randomly scattered around zero with no clear pattern. A pattern would suggest the model is systematically wrong for certain wage ranges. The third plot shows the Distribution of Residuals, ideally this should be a bell curve centered at zero, meaning errors are symmetric and the model is not consistently over or under predicting. In our case the residuals are approximately centered at zero, which is a good sign, though the spread reflects the inherent difficulty of predicting wages from survey data.
 
-**Performance discussion:**
-
-The model achieves an R² of approximately 0.31–0.40 on this dataset. While this may seem modest, it is expected and acceptable given:
-
--   **Bucketed variables**: Age and experience are ranges (e.g. 25–29, 1–2 years), not exact values — this loses precision
--   **Self-reported global survey**: Wages vary enormously across countries and roles; a single model must capture all this diversity
--   **Inherent noise**: Survey respondents may approximate or misreport salaries
--   **No continuous numeric predictors**: Almost all features are categorical, limiting the model's ability to capture fine-grained patterns
-
-An R² of 0.31+ on a noisy global wage survey is consistent with published research on similar datasets.
+The model achieves an R² of approximately 0.33, which while modest is expected and acceptable for this dataset. Age and experience are bucketed ranges rather than exact values, wages are self-reported across vastly different countries and roles, and almost all features are categorical, leaving the model with limited ability to capture fine-grained patterns. Survey respondents may also approximate or misreport their salaries, adding further noise. An R² of 0.33 on a noisy global wage survey is consistent with published research on similar datasets.
 
 ------------------------------------------------------------------------
 
@@ -442,15 +430,14 @@ An R² of 0.31+ on a noisy global wage survey is consistent with published resea
 
 ### 5.1 Feature Importance
 
-XGBoost's built-in importance measures show which features contributed most to splits across all trees. We show the top 20 features by **Gain** — the average improvement in loss brought by a feature.
+XGBoost's built-in importance measures show which features contributed most to splits across all trees. We show the top 20 features by **Gain**
 
 ```{r feature-importance, fig.width=9, fig.height=7}
 importance_matrix <- xgb.importance(model = xgb_model)
 
 xgb.plot.importance(
   importance_matrix[1:20, ],
-  main = "Top 20 Features by Gain — XGBoost",
-  col  = "steelblue"
+  main = "Top 20 Features by Gain"
 )
 ```
 
@@ -513,7 +500,7 @@ bd <- predict_parts(
 )
 
 plot(bd) +
-  labs(title = "Break-Down Explanation — Single Prediction") +
+  labs(title = "Break-Down Explanation Single Prediction") +
   theme_minimal()
 ```
 
@@ -530,7 +517,7 @@ shap_vals <- predict_parts(
 )
 
 plot(shap_vals) +
-  labs(title = "SHAP Values — Single Prediction") +
+  labs(title = "SHAP Values Single Prediction") +
   theme_minimal()
 ```
 
@@ -545,113 +532,62 @@ We predict each team member's expected wage by constructing their profile using 
 **Edit the values below to match your real team profiles.**
 
 ```{r team-prediction}
-# Zero-filled template with all XGBoost features
-template_xgb <- as.data.frame(matrix(0, nrow = 1, ncol = ncol(X_train)))
+# Zero-filled template
+template_xgb <- as.data.frame(matrix(0, nrow = 3, ncol = ncol(X_train)))
 colnames(template_xgb) <- colnames(X_train)
 
-make_xgb_profile <- function(template, settings) {
-  profile <- template
-  for (col in names(settings)) {
-    if (col %in% colnames(profile)) {
-      profile[[col]] <- settings[[col]]
-    } else {
-      warning(paste("Column not found:", col))
-    }
-  }
-  return(profile)
-}
+# ---- Member 1: Deniz ----
+template_xgb["1", "age.25.29"] <- 1
+template_xgb["1", "gender.Male"] <- 1
+template_xgb["1", "country.Switzerland"] <- 1
+template_xgb["1", "education.Bachelor.s.degree"] <- 1
+template_xgb["1", "job_role.Software.Engineer"] <- 1
+template_xgb["1", "years_experience.1.2"] <- 1
+template_xgb["1", "Programming_Python"] <- 1
+template_xgb["1", "Programming_R"] <- 1
+template_xgb["1", "Programming_SQL"] <- 1
+template_xgb["1", "ML_framework_PyTorch"] <- 1
 
-# ---- Team Member 1 ---- (edit these!)
-member1 <- make_xgb_profile(template_xgb, list(
-  age.25.29                          = 1,
-  gender.Male                        = 1,
-  country.Switzerland                = 1,
-  education.Bachelor.s.degree         = 1,
-  undergraduate_major.Computer.science..software.engineering..etc.. = 1,
-  job_role.Software.Engineer            = 1,
-  years_experience.1.2               = 1,
-  Programming_Python                 = 1,
-  Programming_Java = 1,
-  Programming_Javascript.Typescript = 1,
-  ML_framework_PyTorch = 1,
-ML_framework_Xgboost = 1,
-ML_framework_randomForest = 1,
-  Programming_R                      = 1,
-  Programming_SQL                    = 1,
-  ML_atwork.We.recently.started.using.ML.methods..i.e...models.in.production.for.less.than.2.years. = 1,
-Visualization_ggplot2 = 1,
-Visualization_Matplotlib =1,
-Visualization_Shiny = 1,
-Visualization_Plotly = 1
-))
+# ---- Member 2: Thiraviyachelvam ----
+template_xgb["2", "age.22.24"] <- 1
+template_xgb["2", "gender.Male"] <- 1
+template_xgb["2", "country.Switzerland"] <- 1
+template_xgb["2", "education.Bachelor.s.degree"] <- 1
+template_xgb["2", "job_role.Principal.Investigator"] <- 1
+template_xgb["2", "years_experience.0.1"] <- 1
+template_xgb["2", "Programming_Python"] <- 1
+template_xgb["2", "Programming_R"] <- 1
+template_xgb["2", "Programming_SQL"] <- 1
 
-
-
-
-# ---- Team Member 2 ---- (edit these!)
-member2 <- make_xgb_profile(template_xgb, list(
-  age.22.24                          = 1,
-  gender.Male                      = 1,
-  country.Switzerland                    = 1,
-  education.Bachelor.s.degree          = 1,
-  undergraduate_major.I.never.declared.a.major = 1,
-  job_role.Principal.Investigator = 1,
-  years_experience.0.1 = 1,
-  industry.Military.Security.Defense = 1,
-  Programming_Python = 1,
-  Programming_R = 1,
-  Programming_SQL = 1,
-  Programming_Bash = 1
-))
-
-
-
-# ---- Team Member 3 ---- (edit these!)
-member3 <- make_xgb_profile(template_xgb, list(
-  age.22.24                          = 1,
-  gender.Male                      = 1,
-  country.Switzerland                    = 1,
-  education.Bachelor.s.degree          = 1,
-  undergraduate_major.Computer.science..software.engineering..etc.. = 1,
-  job_role.Data.Analyst = 1,
-  years_experience.1.2 = 1,
-  industry.Computers.Technology = 1,
-  Programming_Python = 1,
-  Programming_R = 1,
-  Programming_SQL = 1,
-  Programming_Bash = 1,
-  Programming_Javascript.Typescript = 1,
-  ML_framework_PyTorch = 1,
-  ML_framework_Xgboost = 1,
-  ML_framework_randomForest = 1,
-  ML_framework_H20 = 1,
-  Visualization_ggplot2 = 1,
-  Visualization_Shiny = 1,
-Visualization_Plotly = 1
-))
-
+# ---- Member 3: Sen ----
+template_xgb["3", "age.22.24"] <- 1
+template_xgb["3", "gender.Male"] <- 1
+template_xgb["3", "country.Switzerland"] <- 1
+template_xgb["3", "education.Bachelor.s.degree"] <- 1
+template_xgb["3", "job_role.Data.Analyst"] <- 1
+template_xgb["3", "years_experience.1.2"] <- 1
+template_xgb["3", "Programming_Python"] <- 1
+template_xgb["3", "Programming_R"] <- 1
+template_xgb["3", "Programming_SQL"] <- 1
+template_xgb["3", "ML_framework_PyTorch"] <- 1
 
 # Predict
-team_profiles   <- bind_rows(member1, member2, member3)
-team_dmatrix    <- xgb.DMatrix(as.matrix(team_profiles))
+team_dmatrix    <- xgb.DMatrix(as.matrix(template_xgb))
 team_log_preds  <- predict(xgb_model, team_dmatrix)
 team_wage_preds <- expm1(team_log_preds)
 
-team_results <- data.frame(
+data.frame(
   Member         = c("Deniz", "Thiraviyachelvam", "Sen"),
   Predicted_Wage = paste0("$", format(round(team_wage_preds, 0), big.mark = ","))
 )
-
-print(team_results)
 ```
 
 ```{r team-plot, fig.width=7, fig.height=4}
-team_plot_df <- data.frame(
+data.frame(
   Member = c("Deniz", "Thiraviyachelvam", "Sen"),
   Wage   = team_wage_preds
-)
-
-ggplot(team_plot_df, aes(x = Member, y = Wage, fill = Member)) +
+) %>%
+  ggplot(aes(x = Member, y = Wage, fill = Member)) +
   geom_col(alpha = 0.85, width = 0.5) +
   geom_text(aes(label = paste0("$", format(round(Wage, 0), big.mark = ","))),
             vjust = -0.5, fontface = "bold") +
@@ -660,81 +596,85 @@ ggplot(team_plot_df, aes(x = Member, y = Wage, fill = Member)) +
        x = NULL, y = "Predicted Wage (USD)") +
   theme_minimal() +
   theme(legend.position = "none")
-
 ```
+
 ```{r shap-member1, message=FALSE, warning=FALSE, fig.width=9, fig.height=7}
 shap_m1 <- predict_parts(
   explainer       = explainer,
-  new_observation = member1,
+  new_observation = template_xgb[1, ],
   type            = "shap",
   B               = 15
 )
+
+bd1 <- predict_parts(
+  explainer       = explainer,
+  new_observation = template_xgb[1, ],
+  type            = "break_down"
+)
+
+plot(bd1) +
+  labs(title = "Break-Down Explanation Deniz") +
+  theme_minimal()
+
 plot(shap_m1) +
   labs(title = "SHAP Values Deniz") +
   theme_minimal()
-```
 
-```{r shap-member2, message=FALSE, warning=FALSE, fig.width=9, fig.height=7}
 shap_m2 <- predict_parts(
   explainer       = explainer,
-  new_observation = member2,
+  new_observation = template_xgb[2, ],
   type            = "shap",
   B               = 15
 )
+
+bd2 <- predict_parts(
+  explainer       = explainer,
+  new_observation = template_xgb[2, ],
+  type            = "break_down"
+)
+
+plot(bd2) +
+  labs(title = "Break-Down Explanation Thiraviyachelvam") +
+  theme_minimal()
+
 plot(shap_m2) +
   labs(title = "SHAP Values Thiraviyachelvam") +
   theme_minimal()
-```
 
-```{r shap-member3, message=FALSE, warning=FALSE, fig.width=9, fig.height=7}
 shap_m3 <- predict_parts(
   explainer       = explainer,
-  new_observation = member3,
+  new_observation = template_xgb[3, ],
   type            = "shap",
   B               = 15
 )
+
+bd3 <- predict_parts(
+  explainer       = explainer,
+  new_observation = template_xgb[3, ],
+  type            = "break_down"
+)
+
+plot(bd2) +
+  labs(title = "Break-Down Explanation Sen") +
+  theme_minimal()
+
 plot(shap_m3) +
   labs(title = "SHAP Values Sen") +
   theme_minimal()
 ```
 
-**Reflection**: The predicted wages reflect population-level patterns from the Kaggle Data Science Survey. Country has the largest effect — Switzerland and Germany consistently predict higher wages than the global average, reflecting higher cost of living and strong data science markets. Experience and education level further refine predictions within each country. These estimates should be treated as benchmarks rather than precise forecasts, as individual factors like company size, negotiation, and specific skills are not captured in the survey.
+By examining the SHAP plots we can gain a clear understanding of how the model makes its wage predictions. A few features stand out as particularly strong influences. Most notably country and age. Most other features, including programming languages and even education level, appear to have relatively small individual effects and are often grouped together in the residual 'other factors' category.
+This pattern can be explained in two ways. First, outliers in the data may still be heavily influencing predictions despite our cleaning steps. Second, features like programming languages and education, while intuitively important, may not carry enough signal in this dataset to dominate the prediction individually.
+This does not mean the results are meaningless. It makes intuitive sense that a young person with little experience earns significantly less than someone with many years of experience living in a high-income country. However, the SHAP analysis also reveals the limitations of the dataset itself. Important wage drivers such as company size, local market conditions, and individual salary negotiations are not captured in the survey data. SHAP can only reflect what the data provides and in this case it essentially reflects average wages per country.
+It is worth noting that if the model were trained on data from a single country, predictions would likely be considerably more accurate, as country-level wage variance would be eliminated. This is both a self-critique of the dataset and a reflection of the modelling choices we made. Nevertheless, within the context of this project, the model provides a solid and interpretable baseline for predicting wages on a global scale.
 
 ------------------------------------------------------------------------
 
-## 7. Conclusions
+# 7 Conlusion
 
-### Model Choice
-
-We selected **XGBoost** as our sole model because it is the best-performing algorithm for tabular data with many sparse binary features. Its gradient boosting mechanism — building trees sequentially to correct previous errors — combined with strong regularisation parameters (`lambda`, `alpha`, `gamma`, `min_child_weight`) makes it particularly well-suited to noisy survey data.
-
-### Model Performance
-
--   R² = **`r round(xgb_r2, 3)`** on the held-out test set
--   RMSE ≈ **`r round(xgb_rmse_orig, 0)` USD** in original scale
--   MAE ≈ **`r round(xgb_mae_orig, 0)` USD** in original scale
-
-An R² of \~0.31–0.40 is expected and acceptable for this dataset. The primary reasons are: (1) age and experience are bucketed ranges, not exact values; (2) wages are self-reported across vastly different countries and industries; (3) no continuous numeric predictors are available. This R² is consistent with published wage prediction models on similar survey datasets.
-
-### Feature Decisions
-
--   **Included**: demographics (age, gender, country), education, experience, job role, industry, programming skills, ML tool usage, cloud platforms, activities, coding time percentage, ML experience years
--   **Excluded**: Columns with \>40% missing values
--   **Transformed**: All categoricals one-hot encoded (260+ features); wage log-transformed to address right skew
-
-### Key Drivers of Wage
-
-Based on XGBoost feature importance (Gain) and SHAP values:
-
--   **Country** — the single strongest predictor, reflecting labour market and cost-of-living differences
--   **Age and years of experience** — strong positive relationship with wage
--   **Job role** — Chief Officers, Software Engineers, and Data Scientists predict higher wages
--   **Education** — Doctoral and Master's degrees associated with higher wages
--   **ML maturity at work** — respondents at companies with established ML in production earn more
-
-### Limitations
-
--   The model captures survey-level patterns, not individual circumstances
--   Wage brackets are self-reported and may be imprecise
--   The dataset reflects the Kaggle community, which skews towards certain countries and roles
--   Team predictions are benchmarks — actual salaries depend on company, negotiation, and local market conditions
+In this project we built a predictive model for wages using survey data from the Kaggle Data Science community. After testing three models, Linear Regression, Random Forest and XGBoost, we selected XGBoost as our final model based on its superior performance, computational efficiency and native SHAP compatibility.
+The model achieved an R² of approximately 0.33. While modest, this is expected given that wages are self-reported, globally diverse and influenced by factors not captured in the survey such as company size, local market conditions and individual negotiations. An interesting finding during our process was that excluding zero wages nearly doubled model accuracy, highlighting an important trade-off between predictive performance and representativeness of the full population.
+The explainability analysis showed that country and age are by far the strongest wage predictors, which aligns with real-world intuition. Programming languages and education showed relatively small individual effects. Not a failure of the model, but a reflection of the data available.
+For the team predictions, the model provided reasonable estimates for each member. Switzerland consistently predicted higher wages, reflecting its strong labour market and high cost of living.
+Looking ahead, the most impactful improvement would be richer data. Variables such as company size, city, years in current role and actual negotiated salaries would give the model considerably more signal. Building separate country-specific models would also eliminate the enormous wage variance introduced by combining vastly different labour markets into a single prediction.
+Overall this project gave us a solid understanding of the full machine learning pipeline from data cleaning and feature engineering through model selection, hyperparameter tuning and explainability. The model serves as a good baseline for global wage prediction, and with richer and more representative data, accuracy could be improved significantly.
